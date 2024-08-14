@@ -1,0 +1,138 @@
+﻿@page "/"
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Home</PageTitle>
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="vs/editor/editor.main.css">
+
+<h1>monaco editor</h1>
+<MudButton OnClick="@GetModelValue">Get</MudButton>
+<MudButton OnClick="@SetModelValue">Set</MudButton>
+<div id="monaco_editor" style="height:100%" />
+<script src="vs/loader.js"></script>
+
+<script>
+	var darkMode = true;
+	require.config({ paths: { vs: 'vs' } });
+	require.config({
+		'vs/nls': {
+			availableLanguages: {
+				'*': 'zh-cn'
+			}
+		}
+	});
+	var monacoEditor = [];
+
+	require(['vs/editor/editor.main'], function () {
+		var uri = monaco.Uri.parse('file://default.js');
+		var model = monaco.editor.getModel(uri);
+		if (!model)
+			model = monaco.editor.createModel(['function x() {', '\tconsole.log("Hello world!");', '}'].join('\n'), 'javascript', uri);
+
+		monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
+			model: model,
+			theme: darkMode ? "vs-dark" : "vs-light",
+			automaticLayout: true,
+			minimap: { enabled: false },
+		});
+
+		const removableIds = ['editor.action.revealDefinition'
+							, 'editor.action.goToReferences'
+							, 'editor.action.quickOutline'
+							, 'submenuitem.EditorContextPeek'
+							, 'vs.actions.separator'
+							, 'editor.action.rename'
+							, 'editor.action.changeAll'
+							, 'editor.action.formatDocument'
+							, 'editor.action.quickCommand'];
+		const contextmenu = monacoEditor.getContribution('editor.contrib.contextmenu');
+		const realMethod = contextmenu._getMenuActions;
+		contextmenu._getMenuActions = function () {
+			const items = realMethod.apply(contextmenu, arguments);
+
+			return items.filter(function (item) {
+				return !removableIds.includes(item.id);
+			});
+		};
+
+		monacoEditor.addAction({
+			id: 'select-all',
+			label: '全选',
+			contextMenuGroupId: 'navigation',
+			contextMenuOrder: 1.5,
+			run: function (ed) {
+				ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
+			}
+		});
+		
+		monacoEditor.addAction({
+			id: 'disable-paste',
+			label: 'Disable Paste',
+			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV],
+			run: function () {
+				// Do nothing to disable the default paste action
+			}
+		});
+
+		// 添加自定义粘贴操作
+		monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
+			navigator.clipboard.readText().then(function (text) {
+				const modifiedText = text.toUpperCase();
+
+				const selection = monacoEditor.getSelection();
+				monacoEditor.executeEdits("", [{
+					range: selection,
+					text: modifiedText,
+					forceMoveMarkers: true
+				}]);
+			});
+		});
+	});
+
+	function changeEditorTheme(v){
+		darkMode = v;
+		monacoEditor.updateOptions({
+			theme: darkMode ? "vs-dark" : "vs-light"
+		})
+	}
+
+	function getModelValue() {
+		return monacoEditor.getModel().getValue();
+	}
+
+	function setModelValue(value) {
+		return monacoEditor.getModel().setValue(value);
+	}
+
+</script>
+
+@code {
+	protected override void OnAfterRender(bool firstRender)
+	{
+		if (firstRender)
+		{
+			Common.DarkThemeChanged += DarkThemeChanged;
+		}
+	}
+
+	public void Dispose()
+	{
+		Common.DarkThemeChanged -= DarkThemeChanged;
+	}
+
+	public async void DarkThemeChanged(bool darkTheme)
+	{
+		await JS.InvokeVoidAsync("changeEditorTheme", darkTheme);
+	}
+
+	public async void GetModelValue()
+	{
+		var str = await JS.InvokeAsync<string>("getModelValue");
+		Console.WriteLine(str);
+	}
+
+	public async void SetModelValue()
+	{
+		await JS.InvokeVoidAsync("setModelValue", "hello world.");
+	}
+}
