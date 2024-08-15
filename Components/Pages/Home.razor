@@ -1,138 +1,237 @@
-﻿@page "/"
+﻿@using MudBlazor.Services
+@page "/"
 @inject IJSRuntime JS
-@implements IDisposable
+@inject IBrowserViewportService BrowserViewportService
+@implements IAsyncDisposable
+@implements IBrowserViewportObserver
 
 <PageTitle>Home</PageTitle>
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="vs/editor/editor.main.css">
+<link href="MaterialSymbol.css" rel="stylesheet" />
 
 <h1>monaco editor</h1>
 <MudButton OnClick="@GetModelValue">Get</MudButton>
 <MudButton OnClick="@SetModelValue">Set</MudButton>
-<div id="monaco_editor" style="height:100%" />
-<script src="vs/loader.js"></script>
 
-<script>
-	var darkMode = true;
-	require.config({ paths: { vs: 'vs' } });
-	require.config({
-		'vs/nls': {
-			availableLanguages: {
-				'*': 'zh-cn'
-			}
-		}
-	});
-	var monacoEditor = [];
+<MudGrid>
+    <MudItem sm="12" md="6">
+        <div style="position: relative; resize: both; overflow: auto; min-width: 580px; min-height: 300px;">
+            <MudPaper Elevation="20">
+                <MudToolBar>
+                    <MudTooltip Text="一级标题"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="二级标题"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH2" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="粗体"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatBold" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="斜体"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatItalic" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="引用"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatQuote" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="删除线"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatStrikethrough" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="代码块"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.CodeBlocks" Color="Color.Inherit" /></MudTooltip>
+                    <div class="divider" />
+                    <MudTooltip Text="图片"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Imagesmode" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="链接"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Link" Color="Color.Inherit" /></MudTooltip>
+                    <div class="divider" />
+                    <MudTooltip Text="无序列表"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListBulleted" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="有序列表"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListNumbered" Color="Color.Inherit" /></MudTooltip>
+                    @if (!ShowPreview)
+                    {
+                        <MudSpacer />
+                        <MudTooltip Text="预览"><MudIconButton OnClick="PreviewShowAndRefresh" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Preview" Color="Color.Primary" /></MudTooltip>
+                    }
+                </MudToolBar>
+            </MudPaper>
+            <div id="monaco_editor" style="height: 100%; min-height: 600px;" />
+            <MudPaper Elevation="20" Style="position: sticky; bottom: 0; right: 16px; left: 0;">
+                <MudToolBar Style="height: 40px;">
+                    <MudText>字数：114514</MudText>
+                    <MudSpacer></MudSpacer>
+                    <MudText>行：111 列：333</MudText>
+                    <div class="divider" style="margin: 0 10px;" />
+                    <MudText Style="margin-right: 5px;">空格：4</MudText>
+                </MudToolBar>
+            </MudPaper>
+        </div>
+    </MudItem>
+    @if (ShowPreview)
+    {
+        <MudItem sm="12" md="6">
+            <MarkdownPreview @ref="Preview" />
+        </MudItem>
+    }
+    </MudGrid>
+    <MudDrawer @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
+        <MarkdownPreview @ref="Preview" />
+    </MudDrawer>
+    <script src="vs/loader.js"></script>
 
-	require(['vs/editor/editor.main'], function () {
-		var uri = monaco.Uri.parse('file://default.js');
-		var model = monaco.editor.getModel(uri);
-		if (!model)
-			model = monaco.editor.createModel(['function x() {', '\tconsole.log("Hello world!");', '}'].join('\n'), 'javascript', uri);
+    <script>
+        var darkMode = true;
+        require.config({ paths: { vs: 'vs' } });
+        require.config({
+            'vs/nls': {
+                availableLanguages: {
+                    '*': 'zh-cn'
+                }
+            }
+        });
+        var monacoEditor = [];
 
-		monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
-			model: model,
-			theme: darkMode ? "vs-dark" : "vs-light",
-			automaticLayout: true,
-			minimap: { enabled: false },
-		});
+        function initEditor() {
+            require(['vs/editor/editor.main'], function () {
+                var uri = monaco.Uri.parse('file://default.js');
+                var model = monaco.editor.getModel(uri);
+                if (!model)
+                    model = monaco.editor.createModel(['function x() {', '\tconsole.log("Hello world!");', '}'].join('\n'), 'javascript', uri);
 
-		const removableIds = ['editor.action.revealDefinition'
-							, 'editor.action.goToReferences'
-							, 'editor.action.quickOutline'
-							, 'submenuitem.EditorContextPeek'
-							, 'vs.actions.separator'
-							, 'editor.action.rename'
-							, 'editor.action.changeAll'
-							, 'editor.action.formatDocument'
-							, 'editor.action.quickCommand'];
-		const contextmenu = monacoEditor.getContribution('editor.contrib.contextmenu');
-		const realMethod = contextmenu._getMenuActions;
-		contextmenu._getMenuActions = function () {
-			const items = realMethod.apply(contextmenu, arguments);
+                monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
+                    model: model,
+                    theme: darkMode ? "vs-dark" : "vs-light",
+                    automaticLayout: true,
+                    minimap: { enabled: false },
+                });
 
-			return items.filter(function (item) {
-				return !removableIds.includes(item.id);
-			});
-		};
+                const removableIds = ['editor.action.revealDefinition'
+                    , 'editor.action.goToReferences'
+                    , 'editor.action.quickOutline'
+                    , 'submenuitem.EditorContextPeek'
+                    , 'vs.actions.separator'
+                    , 'editor.action.rename'
+                    , 'editor.action.changeAll'
+                    , 'editor.action.formatDocument'
+                    , 'editor.action.quickCommand'];
+                const contextmenu = monacoEditor.getContribution('editor.contrib.contextmenu');
+                const realMethod = contextmenu._getMenuActions;
+                contextmenu._getMenuActions = function () {
+                    const items = realMethod.apply(contextmenu, arguments);
 
-		monacoEditor.addAction({
-			id: 'select-all',
-			label: '全选',
-			contextMenuGroupId: 'navigation',
-			contextMenuOrder: 1.5,
-			run: function (ed) {
-				ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
-			}
-		});
-		
-		monacoEditor.addAction({
-			id: 'disable-paste',
-			label: 'Disable Paste',
-			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV],
-			run: function () {
-				// Do nothing to disable the default paste action
-			}
-		});
+                    return items.filter(function (item) {
+                        return !removableIds.includes(item.id);
+                    });
+                };
 
-		// 添加自定义粘贴操作
-		monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
-			navigator.clipboard.readText().then(function (text) {
-				const modifiedText = text.toUpperCase();
+                monacoEditor.addAction({
+                    id: 'select-all',
+                    label: '全选',
+                    contextMenuGroupId: 'navigation',
+                    contextMenuOrder: 1.5,
+                    run: function (ed) {
+                        ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
+                    }
+                });
 
-				const selection = monacoEditor.getSelection();
-				monacoEditor.executeEdits("", [{
-					range: selection,
-					text: modifiedText,
-					forceMoveMarkers: true
-				}]);
-			});
-		});
-	});
+                monacoEditor.addAction({
+                    id: 'disable-paste',
+                    label: 'Disable Paste',
+                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV],
+                    run: function () {
+                        // Do nothing to disable the default paste action
+                    }
+                });
 
-	function changeEditorTheme(v){
-		darkMode = v;
-		monacoEditor.updateOptions({
-			theme: darkMode ? "vs-dark" : "vs-light"
-		})
-	}
+                // 添加自定义粘贴操作
+                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
+                    navigator.clipboard.readText().then(function (text) {
+                        const modifiedText = text.toUpperCase();
 
-	function getModelValue() {
-		return monacoEditor.getModel().getValue();
-	}
+                        const selection = monacoEditor.getSelection();
+                        monacoEditor.executeEdits("", [{
+                            range: selection,
+                            text: modifiedText,
+                            forceMoveMarkers: true
+                        }]);
+                    });
+                });
+            });
+        }
 
-	function setModelValue(value) {
-		return monacoEditor.getModel().setValue(value);
-	}
 
-</script>
+        function changeEditorTheme(v) {
+            darkMode = v;
+            monacoEditor.updateOptions({
+                theme: darkMode ? "vs-dark" : "vs-light"
+            })
+        }
 
-@code {
-	protected override void OnAfterRender(bool firstRender)
-	{
-		if (firstRender)
-		{
-			Common.DarkThemeChanged += DarkThemeChanged;
-		}
-	}
+        function getModelValue() {
+            return monacoEditor.getModel().getValue();
+        }
 
-	public void Dispose()
-	{
-		Common.DarkThemeChanged -= DarkThemeChanged;
-	}
+        function setModelValue(value) {
+            return monacoEditor.getModel().setValue(value);
+        }
 
-	public async void DarkThemeChanged(bool darkTheme)
-	{
-		await JS.InvokeVoidAsync("changeEditorTheme", darkTheme);
-	}
+    </script>
+    <style>
+        .divider {
+            border: 1px solid;
+            height: 50%;
+            width: 2px;
+            border-color: var(--mud-palette-divider);
+        }
+    </style>
+    @code {
+    Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
 
-	public async void GetModelValue()
-	{
-		var str = await JS.InvokeAsync<string>("getModelValue");
-		Console.WriteLine(str);
-	}
+    ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
+        {
+            ReportRate = 250,
+            NotifyOnBreakpointOnly = true
+        };
 
-	public async void SetModelValue()
-	{
-		await JS.InvokeVoidAsync("setModelValue", "hello world.");
-	}
+    public bool ShowPreview { get; set; } = true;
+
+    private MarkdownPreview Preview { get; set; }
+
+    private bool PreviewDrawerOpen { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Common.DarkThemeChanged += DarkThemeChanged;
+            await JS.InvokeVoidAsync("initEditor");
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await BrowserViewportService.UnsubscribeAsync(this);
+        Common.DarkThemeChanged -= DarkThemeChanged;
+    }
+
+    public async void DarkThemeChanged(bool darkTheme)
+    {
+        await JS.InvokeVoidAsync("changeEditorTheme", darkTheme);
+    }
+
+    public async Task<string> GetModelValue()
+    {
+        var str = await JS.InvokeAsync<string>("getModelValue");
+        return str;
+    }
+
+    public async void SetModelValue()
+    {
+        await JS.InvokeVoidAsync("setModelValue", "hello world.");
+    }
+
+    public async void PreviewShowAndRefresh()
+    {
+        if (!ShowPreview)
+        {
+            PreviewDrawerOpen = true;
+        }
+        await Preview.ReloadFrame(await GetModelValue());
+    }
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs e)
+    {
+        ShowPreview = e.Breakpoint switch
+        {
+            Breakpoint.Lg => true,
+            Breakpoint.Xl => true,
+            _ => false
+        };
+        PreviewShowAndRefresh();
+        return InvokeAsync(StateHasChanged);
+    }
 }
