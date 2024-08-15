@@ -1,0 +1,72 @@
+﻿@inject IJSRuntime JS
+@using Markdig
+
+<iframe id="preview-iframe">
+
+</iframe>
+
+<script>
+    function updatePreview(content) {
+        const previewIframe = document.getElementById('preview-iframe');
+        const iframeDoc = previewIframe.contentDocument || previewIframe.contentWindow.document;
+        if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(content);
+            iframeDoc.close();
+        }
+    }
+</script>
+
+@code {
+    [Parameter]
+    public string MarkDownContent{ get; set; }
+
+    private string Frame => @"<!DOCTYPE html>
+<html>
+<head>
+    {css}
+    <script src=""highlight.min.js""></script>
+    <meta charset='utf-8'>
+</head>
+<article class=""markdown-body"">
+    {markdown}
+</article>
+<script>hljs.highlightAll();</script>
+<style>
+.markdown-body {
+	box-sizing: border-box;
+	margin: 0 auto;
+	padding: 16px;
+}
+</style>
+</html>";
+
+    private bool Loaded{ get; set; }
+
+    private string ContentToRender { get; set; } = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Loaded = true;
+            await JS.InvokeVoidAsync("updatePreview", Markdown.ToHtml(MarkDownContent, Common.GetMarkdownRender()));
+        }
+    }
+
+    public async Task ReloadFrame(string content)
+    {
+        string css = Common.IsDarkMode 
+            ? "<link rel=\"stylesheet\" href=\"github-dark.min.css\"> <link rel=\"stylesheet\" href=\"github-markdown-dark.min.css\">"
+            : "<link rel=\"stylesheet\" href=\"github.min.css\"> <link rel=\"stylesheet\" href=\"github-markdown-light.min.css\">";
+        MarkDownContent = Frame.Replace("{markdown}", content);
+        if (Loaded)
+        {
+            await JS.InvokeVoidAsync("updatePreview", Markdown.ToHtml(MarkDownContent, Common.GetMarkdownRender()));
+        }
+        else
+        {
+            ContentToRender = MarkDownContent;
+        }
+    }
+}
