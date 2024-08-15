@@ -53,7 +53,7 @@
     {
         _isDarkMode = !_isDarkMode;
         Common.IsDarkMode = _isDarkMode;
-        Common.DarkThemeChanged?.Invoke(_isDarkMode);
+        Common.InvokeDarkModeChanged(_isDarkMode);
     }
 
     private readonly PaletteLight _lightPalette = new()
