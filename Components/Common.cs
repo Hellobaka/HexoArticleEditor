@@ -1,6 +1,4 @@
-﻿using Markdig;
-
-namespace HexoArticleEditor.Components
+﻿namespace HexoArticleEditor.Components
 {
     public class Common
     {
@@ -12,17 +10,5 @@ namespace HexoArticleEditor.Components
         }
 
         public static bool IsDarkMode { get; set; } = true;
-
-        private static MarkdownPipeline? MarkdownRender { get; set; }
-
-        public static MarkdownPipeline GetMarkdownRender()
-        {
-            MarkdownRender ??= new MarkdownPipelineBuilder()
-                .UseAdvancedExtensions()
-                .UseTaskLists()
-                .UseEmphasisExtras()
-                .Build();
-            return MarkdownRender;
-        }
     }
 }
