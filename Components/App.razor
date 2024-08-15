@@ -9,6 +9,11 @@
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />  
     <link rel="icon" type="image/ico" href="favicon.ico" />
     <HeadOutlet @rendermode="InteractiveServer" />
+    <script>
+        const chineseRegex = /[\u4e00-\u9fa5]/g;
+        const englishRegex = /\b[a-zA-Z]+\b/g;
+        let darkMode = true;
+    </script>
 </head>
 
 <body>
@@ -16,5 +21,4 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 </body>
-
 </html>

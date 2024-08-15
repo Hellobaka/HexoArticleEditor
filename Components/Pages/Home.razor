@@ -9,6 +9,7 @@
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="vs/editor/editor.main.css">
 <link href="MaterialSymbol.css" rel="stylesheet" />
 <script src="marked.min.js"></script>
+<script src="vs/loader.js"></script>
 
 <h1>monaco editor</h1>
 <MudButton OnClick="@GetModelValue">Get</MudButton>
@@ -42,11 +43,21 @@
             <div id="monaco_editor" style="height: calc(100% - 104px); min-height: 600px;" />
             <MudPaper Elevation="20" Style="position: sticky; bottom: 0; right: 16px; left: 0;">
                 <MudToolBar Style="height: 40px;">
-                    <MudText>字数：114514</MudText>
-                    <MudSpacer></MudSpacer>
-                    <MudText>行：111 列：333</MudText>
+                    <MudText id="wordCount">字数：0</MudText>
                     <div class="divider" style="margin: 0 10px;" />
-                    <MudText Style="margin-right: 5px;">空格：4</MudText>
+                    <MudText id="selectionCount">选中：0</MudText>
+                    <div class="divider" style="margin: 0 10px;" />
+                    <MudText id="status"></MudText>
+                    <MudSpacer></MudSpacer>
+                    <MudText id="cursorPosition">行：0, 列：0</MudText>
+                    <div class="divider" style="margin: 0 10px;" />
+                    <MudMenu Label="@TabStopDisplay">
+                        <MudMenuItem OnClick="() => TabStopChanged(true, 1)">制表符：1</MudMenuItem>
+                        <MudMenuItem OnClick="() => TabStopChanged(true, 2)">制表符：2</MudMenuItem>
+                        <MudMenuItem OnClick="() => TabStopChanged(false, 1)">空格：1</MudMenuItem>
+                        <MudMenuItem OnClick="() => TabStopChanged(false, 2)">空格：2</MudMenuItem>
+                        <MudMenuItem OnClick="() => TabStopChanged(false, 4)">空格：4</MudMenuItem>
+                    </MudMenu>
                 </MudToolBar>
             </MudPaper>
         </div>
@@ -61,10 +72,22 @@
     <MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
         <MarkdownPreview @ref="Preview" />
     </MudDrawer>
-    <script src="vs/loader.js"></script>
 
     <script>
-        var darkMode = true;
+        function debounce(func, wait) {
+            let timeout;
+
+            return function (...args) {
+                const context = this;
+
+                clearTimeout(timeout);
+
+                timeout = setTimeout(() => {
+                    func.apply(context, args);
+                }, wait);
+            };
+        }
+
         require.config({ paths: { vs: 'vs' } });
         require.config({
             'vs/nls': {
@@ -76,8 +99,10 @@
         var monacoEditor = {};
         var homePage = {}
         var editorLoaded = false
+
         function initEditor(blazorPageInstance) {
             homePage = blazorPageInstance
+
             require(['vs/editor/editor.main'], function () {
                 var uri = monaco.Uri.parse('file://default.js');
                 var model = monaco.editor.getModel(uri);
@@ -88,7 +113,10 @@
                     model: model,
                     theme: darkMode ? "vs-dark" : "vs-light",
                     automaticLayout: true,
+                    unicodeHighlight: { ambiguousCharacters: false, },
+                    fontFamily: 'Consolas, \'Courier New\', \'微软雅黑\'',
                     minimap: { enabled: false },
+                    renderWhitespace: true,
                 });
 
                 const removableIds = ['editor.action.revealDefinition'
@@ -129,6 +157,13 @@
                     }
                 });
 
+                monacoEditor.addAction({
+                    id: 'disable-F12',
+                    label: 'Disable F12',
+                    keybindings: [monaco.KeyCode.F12],
+                    run: function () { }
+                });
+
                 // 添加自定义粘贴操作
                 monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
                     navigator.clipboard.readText().then(function (text) {
@@ -143,13 +178,34 @@
                     });
                 });
 
-                monacoEditor.onDidChangeModelContent(async (event) => {
+                let debouncedCountWords = debounce(async () => {
                     await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
+                    updateWordCount(countWords(getModelValue()))
+                }, 500)
+
+                monacoEditor.onDidChangeModelContent((event) => {
+                    debouncedCountWords()
                 });
+
+                monacoEditor.onDidChangeCursorPosition((event) => {
+                    updateCursorPosition(event.position)
+                });
+
+                monacoEditor.onDidChangeCursorSelection((event) => {
+                    updateSelectionCount(countWords(monacoEditor.getModel().getValueInRange(event.selection)))
+                });
+
+                updateWordCount(countWords(getModelValue()));
                 editorLoaded = true
             });
         }
 
+        function countWords(text) {
+            const chineseMatches = text.match(chineseRegex) || [];
+            const englishMatches = text.match(englishRegex) || [];
+
+            return chineseMatches.length + englishMatches.length;
+        }
 
         function changeEditorTheme(v) {
             darkMode = v;
@@ -168,6 +224,47 @@
             return monacoEditor.getModel().setValue(value);
         }
 
+        function updateWordCount(count) {
+            const element = document.getElementById('wordCount')
+            if (element) {
+                element.innerText = `字数：${count}`
+            }
+        }
+
+        function updateSelectionCount(count) {
+            const element = document.getElementById('selectionCount')
+            if (element) {
+                element.innerText = `选中：${count}`
+            }
+        }
+
+        var debouncedClearStatus = debounce(() => {
+            updateStatus('')
+        }, 3000)
+
+        function updateStatus(status) {
+            const element = document.getElementById('status')
+            if (element) {
+                element.innerText = status
+                debouncedClearStatus()
+            }
+        }
+
+        function updateCursorPosition(pos) {
+            const element = document.getElementById('cursorPosition')
+            if (element) {
+                element.innerText = `行：${pos.lineNumber}, 列：${pos.column}`
+            }
+        }
+
+        function updateTabStop(isTab, count) {
+            if (monacoEditor) {
+                monacoEditor.getModel().updateOptions({
+                    tabSize: count,
+                    insertSpaces: !isTab
+                })
+            }
+        }
     </script>
     <style>
         .divider {
@@ -175,6 +272,10 @@
             height: 50%;
             width: 2px;
             border-color: var(--mud-palette-divider);
+        }
+
+        .mud-menu > button > span {
+            font-size: 1rem;
         }
     </style>
 @code {
@@ -188,11 +289,13 @@
 
     public bool ShowPreview { get; set; } = true;
 
+    public string TabStopDisplay { get; set; } = "空格：4";
+
     private MarkdownPreview Preview { get; set; }
 
     private bool PreviewDrawerOpen { get; set; }
 
-    private DotNetObjectReference<Home>? PageInstance{ get; set; }
+    private DotNetObjectReference<Home>? PageInstance { get; set; }
 
     private Debouncer Debouncer { get; set; } = new();
 
@@ -262,5 +365,11 @@
         {
             await Preview.ReloadFrame();
         }, 1000);
+    }
+
+    public async void TabStopChanged(bool isTab, int count)
+    {
+        TabStopDisplay = $"{(isTab ? "制表符" : "空格")}：{count}";
+        await JS.InvokeVoidAsync("updateTabStop", isTab, count);
     }
 }
