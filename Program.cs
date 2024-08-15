@@ -5,7 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
-
+builder.Services.AddServerSideBlazor().AddHubOptions(opt => { opt.MaximumReceiveMessageSize = 10 * 1024 * 1024; });
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

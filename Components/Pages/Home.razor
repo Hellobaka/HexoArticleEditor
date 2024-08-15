@@ -8,6 +8,7 @@
 <PageTitle>Home</PageTitle>
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="vs/editor/editor.main.css">
 <link href="MaterialSymbol.css" rel="stylesheet" />
+<script src="marked.min.js"></script>
 
 <h1>monaco editor</h1>
 <MudButton OnClick="@GetModelValue">Get</MudButton>
@@ -15,7 +16,7 @@
 
 <MudGrid>
     <MudItem sm="12" md="6">
-        <div style="position: relative; resize: both; overflow: auto; min-width: 580px; min-height: 300px;">
+        <div style="position: relative; resize: vertical; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px;">
             <MudPaper Elevation="20">
                 <MudToolBar>
                     <MudTooltip Text="一级标题"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
@@ -38,7 +39,7 @@
                     }
                 </MudToolBar>
             </MudPaper>
-            <div id="monaco_editor" style="height: 100%; min-height: 600px;" />
+            <div id="monaco_editor" style="height: calc(100% - 104px); min-height: 600px;" />
             <MudPaper Elevation="20" Style="position: sticky; bottom: 0; right: 16px; left: 0;">
                 <MudToolBar Style="height: 40px;">
                     <MudText>字数：114514</MudText>
@@ -57,7 +58,7 @@
         </MudItem>
     }
     </MudGrid>
-    <MudDrawer @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
+    <MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
         <MarkdownPreview @ref="Preview" />
     </MudDrawer>
     <script src="vs/loader.js"></script>
@@ -72,14 +73,16 @@
                 }
             }
         });
-        var monacoEditor = [];
-
-        function initEditor() {
+        var monacoEditor = {};
+        var homePage = {}
+        var editorLoaded = false
+        function initEditor(blazorPageInstance) {
+            homePage = blazorPageInstance
             require(['vs/editor/editor.main'], function () {
                 var uri = monaco.Uri.parse('file://default.js');
                 var model = monaco.editor.getModel(uri);
                 if (!model)
-                    model = monaco.editor.createModel(['function x() {', '\tconsole.log("Hello world!");', '}'].join('\n'), 'javascript', uri);
+                    model = monaco.editor.createModel('Hello world!', 'markdown', uri);
 
                 monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
                     model: model,
@@ -129,7 +132,7 @@
                 // 添加自定义粘贴操作
                 monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
                     navigator.clipboard.readText().then(function (text) {
-                        const modifiedText = text.toUpperCase();
+                        const modifiedText = text;
 
                         const selection = monacoEditor.getSelection();
                         monacoEditor.executeEdits("", [{
@@ -139,6 +142,11 @@
                         }]);
                     });
                 });
+
+                monacoEditor.onDidChangeModelContent(async (event) => {
+                    await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
+                });
+                editorLoaded = true
             });
         }
 
@@ -151,7 +159,9 @@
         }
 
         function getModelValue() {
-            return monacoEditor.getModel().getValue();
+            const result = monacoEditor.getModel().getValue();
+            console.log(result.length)
+            return result;
         }
 
         function setModelValue(value) {
@@ -167,7 +177,7 @@
             border-color: var(--mud-palette-divider);
         }
     </style>
-    @code {
+@code {
     Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
 
     ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
@@ -182,12 +192,21 @@
 
     private bool PreviewDrawerOpen { get; set; }
 
+    private DotNetObjectReference<Home>? PageInstance{ get; set; }
+
+    private Debouncer Debouncer { get; set; } = new();
+
+    protected override void OnInitialized()
+    {
+        PageInstance = DotNetObjectReference.Create(this);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             Common.DarkThemeChanged += DarkThemeChanged;
-            await JS.InvokeVoidAsync("initEditor");
+            await JS.InvokeVoidAsync("initEditor", PageInstance);
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
         }
     }
@@ -201,6 +220,7 @@
     public async void DarkThemeChanged(bool darkTheme)
     {
         await JS.InvokeVoidAsync("changeEditorTheme", darkTheme);
+        await Preview.ReloadFrame();
     }
 
     public async Task<string> GetModelValue()
@@ -220,7 +240,7 @@
         {
             PreviewDrawerOpen = true;
         }
-        await Preview.ReloadFrame(await GetModelValue());
+        await Preview.ReloadFrame();
     }
 
     Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs e)
@@ -233,5 +253,14 @@
         };
         PreviewShowAndRefresh();
         return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void NoticeMonacoEditorTextChanged()
+    {
+        Debouncer.Debounce(async () =>
+        {
+            await Preview.ReloadFrame();
+        }, 1000);
     }
 }
