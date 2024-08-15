@@ -20,19 +20,19 @@
         <div style="position: relative; resize: vertical; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px;">
             <MudPaper Elevation="20">
                 <MudToolBar>
-                    <MudTooltip Text="一级标题"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="二级标题"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH2" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="粗体"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatBold" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="斜体"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatItalic" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="引用"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatQuote" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="删除线"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatStrikethrough" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="代码块"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.CodeBlocks" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="一级标题"><MudIconButton OnClick="@((e) => ToolAction("h1"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="二级标题"><MudIconButton OnClick="@((e) => ToolAction("h2"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH2" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="粗体"><MudIconButton OnClick="@((e) => ToolAction("bold"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatBold" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="斜体"><MudIconButton OnClick="@((e) => ToolAction("italic"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatItalic" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="引用"><MudIconButton OnClick="@((e) => ToolAction("quote"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatQuote" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="删除线"><MudIconButton OnClick="@((e) => ToolAction("deleteLine"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatStrikethrough" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="代码块"><MudIconButton OnClick="@((e) => ToolAction("code"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.CodeBlocks" Color="Color.Inherit" /></MudTooltip>
                     <div class="divider" />
-                    <MudTooltip Text="图片"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Imagesmode" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="链接"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Link" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="图片"><MudIconButton OnClick="@((e) => ToolAction("picture"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Imagesmode" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="链接"><MudIconButton OnClick="@((e) => ToolAction("link"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Link" Color="Color.Inherit" /></MudTooltip>
                     <div class="divider" />
-                    <MudTooltip Text="无序列表"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListBulleted" Color="Color.Inherit" /></MudTooltip>
-                    <MudTooltip Text="有序列表"><MudIconButton Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListNumbered" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="无序列表"><MudIconButton OnClick="@((e) => ToolAction("ul"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListBulleted" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="有序列表"><MudIconButton OnClick="@((e) => ToolAction("ol"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListNumbered" Color="Color.Inherit" /></MudTooltip>
                     @if (!ShowPreview)
                     {
                         <MudSpacer />
@@ -164,6 +164,13 @@
                     run: function () { }
                 });
 
+                monacoEditor.addAction({
+                    id: 'disable-F1',
+                    label: 'Disable F1',
+                    keybindings: [monaco.KeyCode.F1],
+                    run: function () { }
+                });
+
                 // 添加自定义粘贴操作
                 monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
                     navigator.clipboard.readText().then(function (text) {
@@ -181,7 +188,7 @@
                 let debouncedCountWords = debounce(async () => {
                     await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
                     updateWordCount(countWords(getModelValue()))
-                }, 500)
+                }, 300)
 
                 monacoEditor.onDidChangeModelContent((event) => {
                     debouncedCountWords()
@@ -263,6 +270,60 @@
                     tabSize: count,
                     insertSpaces: !isTab
                 })
+            }
+        }
+
+        function EditAction(action) {
+            console.log(`EditAction: ${action}`)
+            switch (action){
+                case 'h1':
+                    ExecuteEditAction(action, '# %%', '一级标题')
+                break
+                case 'h2':
+                    ExecuteEditAction(action, '## %%', '二级标题')
+                break
+                case 'bold':
+                    ExecuteEditAction(action, '**%%**', '粗体')
+                break
+                case 'italic':
+                    ExecuteEditAction(action, '*%%*', '斜体')
+                break
+            }
+        }
+
+        function ExecuteEditAction(action, format, hint) {
+            if (monacoEditor) {
+                const editor = monacoEditor
+                const model = monacoEditor.getModel()
+
+                const selection = editor.getSelection();
+                const value = model.getValueInRange(selection)
+                let targetValue = format
+                if (value) {
+                    hint = value
+                }
+
+                targetValue = format.replace('%%', hint)
+                const hintStart = targetValue.indexOf(hint)
+                const hintLength = hint.length
+
+                editor.executeEdits(action, [{
+                    range: selection,
+                    text: targetValue,
+                    forceMoveMarkers: true
+                }]);
+
+                const position = editor.getPosition();
+                const lineContent = model.getLineContent(position.lineNumber);
+                const startColumn = position.column - (targetValue.length - hintStart);
+                const endColumn = startColumn + hintLength;
+
+                const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
+
+                editor.setSelection(range);
+                editor.revealRange(range);
+
+                editor.focus()
             }
         }
     </script>
@@ -364,12 +425,17 @@
         Debouncer.Debounce(async () =>
         {
             await Preview.ReloadFrame();
-        }, 1000);
+        }, 300);
     }
 
     public async void TabStopChanged(bool isTab, int count)
     {
         TabStopDisplay = $"{(isTab ? "制表符" : "空格")}：{count}";
         await JS.InvokeVoidAsync("updateTabStop", isTab, count);
+    }
+
+    public async void ToolAction(string action)
+    {
+        await JS.InvokeVoidAsync("EditAction", action);
     }
 }

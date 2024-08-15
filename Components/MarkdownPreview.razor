@@ -32,7 +32,7 @@
         const css = darkMode
             ? "<link rel=\"stylesheet\" href=\"github-dark.min.css\"> <link rel=\"stylesheet\" href=\"github-markdown-dark.min.css\">"
             : "<link rel=\"stylesheet\" href=\"github.min.css\"> <link rel=\"stylesheet\" href=\"github-markdown-light.min.css\">";
-        let content = marked.parse(template.replace('{css}', css).replace('{markdown}', getModelValue()))
+        let content = template.replace('{css}', css).replace('{markdown}', marked.parse(getModelValue()))
         console.log('preview Invoked')
         const previewIframe = document.getElementById('preview-iframe');
         const iframeDoc = previewIframe.contentDocument || previewIframe.contentWindow.document;
