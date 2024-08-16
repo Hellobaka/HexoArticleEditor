@@ -76,476 +76,476 @@
         </MudItem>
     }
     </MudGrid>
-    <MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
-        <MarkdownPreview @ref="Preview" />
-    </MudDrawer>
+<MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
+    <MarkdownPreview @ref="Preview" />
+</MudDrawer>
 
-    <script>
-        function debounce(func, wait) {
-            let timeout;
+<script>
+    function debounce(func, wait) {
+        let timeout;
 
-            return function (...args) {
-                const context = this;
+        return function (...args) {
+            const context = this;
 
-                clearTimeout(timeout);
+            clearTimeout(timeout);
 
-                timeout = setTimeout(() => {
-                    func.apply(context, args);
-                }, wait);
-            };
-        }
+            timeout = setTimeout(() => {
+                func.apply(context, args);
+            }, wait);
+        };
+    }
 
-        require.config({ paths: { vs: 'vs' } });
-        require.config({
-            'vs/nls': {
-                availableLanguages: {
-                    '*': 'zh-cn'
-                }
+    require.config({ paths: { vs: 'vs' } });
+    require.config({
+        'vs/nls': {
+            availableLanguages: {
+                '*': 'zh-cn'
             }
-        });
-        var monacoEditor = {};
-        var homePage = {}
-        var editorLoaded = false
+        }
+    });
+    var monacoEditor = {};
+    var homePage = {}
+    var editorLoaded = false
 
-        function initEditor(blazorPageInstance) {
-            homePage = blazorPageInstance
+    function initEditor(blazorPageInstance) {
+        homePage = blazorPageInstance
 
-            require(['vs/editor/editor.main'], function () {
-                var uri = monaco.Uri.parse('file://default.js');
-                var model = monaco.editor.getModel(uri);
-                if (!model)
-                    model = monaco.editor.createModel('Hello world!', 'markdown', uri);
+        require(['vs/editor/editor.main'], function () {
+            var uri = monaco.Uri.parse('file://default.js');
+            var model = monaco.editor.getModel(uri);
+            if (!model)
+                model = monaco.editor.createModel('Hello world!', 'markdown', uri);
 
-                monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
-                    model: model,
-                    theme: darkMode ? "vs-dark" : "vs-light",
-                    automaticLayout: true,
-                    unicodeHighlight: { ambiguousCharacters: false, },
-                    fontFamily: 'Consolas, \'Courier New\', \'微软雅黑\'',
-                    minimap: { enabled: false },
-                    renderWhitespace: true,
-                });
-
-                const removableIds = ['editor.action.revealDefinition'
-                    , 'editor.action.goToReferences'
-                    , 'editor.action.quickOutline'
-                    , 'submenuitem.EditorContextPeek'
-                    , 'vs.actions.separator'
-                    , 'editor.action.rename'
-                    , 'editor.action.changeAll'
-                    , 'editor.action.formatDocument'
-                    , 'editor.action.quickCommand'];
-                const contextmenu = monacoEditor.getContribution('editor.contrib.contextmenu');
-                const realMethod = contextmenu._getMenuActions;
-                contextmenu._getMenuActions = function () {
-                    const items = realMethod.apply(contextmenu, arguments);
-
-                    return items.filter(function (item) {
-                        return !removableIds.includes(item.id);
-                    });
-                };
-
-                monacoEditor.addAction({
-                    id: 'select-all',
-                    label: '全选',
-                    contextMenuGroupId: 'navigation',
-                    contextMenuOrder: 1.5,
-                    run: function (ed) {
-                        ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
-                    }
-                });
-                // 禁用默认快捷键
-                monaco.editor.addKeybindingRules([
-                    {
-                        keybinding: monaco.KeyCode.F1,
-                        command: null,
-                    },
-                    {
-                        keybinding: monaco.KeyCode.F8,
-                        command: null,
-                    },
-                    {
-                        keybinding: monaco.KeyCode.F9,
-                        command: null,
-                    },
-                    {
-                        keybinding: monaco.KeyCode.F12,
-                        command: null,
-                    },
-                    {
-                        keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
-                        command: null,
-                    },
-                    {
-                        keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD,
-                        command: null,
-                    },
-                ]);
-                // Ctrl + D 重复内容
-                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, function () {
-                    const editor = monacoEditor
-                    const model = editor.getModel()
-                    const selection = editor.getSelection();
-                    const value = model.getValueInRange(selection)
-                    // 检查是否有选中内容
-                    if (value) {
-                        editor.executeEdits("repeat", [{
-                            range: selection,
-                            text: value + value,
-                            forceMoveMarkers: true
-                        }]);
-                        const position = editor.getPosition();
-                        const startLine = position.lineNumber;
-                        const startColumn = selection.startColumn + value.length;
-                        const endColumn = selection.endColumn + value.length;
-                        const endLine = startLine;
-
-                        const range = new monaco.Range(startLine, startColumn, endLine, endColumn);
-                        // 更新选中区域
-                        editor.setSelection(range);
-                        editor.revealRange(range);
-                        editor.focus()
-                    } else {
-                        // 未选中文本, 重复本行
-                        ExecuteListEditAction('repeat', '%%\n%%', false)
-                    }
-                })
-
-                // 监听粘贴事件 有图片则上传
-                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, async () => {
-                    try {
-                        const clipboardContents = await navigator.clipboard.read();
-                        for (const item of clipboardContents) {
-                            // 寻找图片元素
-                            const type = item.types.find(x => x.includes('image/'))
-                            if (!type || type.split('/').length !== 2) {
-                                continue
-                            }
-                            const extension = type.split('/')[1]
-                            const blob = await item.getType(type);
-                            const file = new File([blob], `.${extension}`)
-
-                            const nativeUpload = document.getElementById('nativeUpload')
-                            if (!nativeUpload) { 
-                                continue
-                            }
-                            // 构造InputFile参数
-                            const dataTransfer = new DataTransfer();
-                            dataTransfer.items.add(file)
-
-                            // 检测是否已经修改过
-                            if (!nativeUpload.modify) {
-                                Object.defineProperty(nativeUpload, 'files', {
-                                    value: dataTransfer.files,
-                                    writable: true // 将元素设定为可修改
-                                });
-                                nativeUpload.modify = true
-                            } else {
-                                nativeUpload.files = dataTransfer.files
-                            }
-                            //事件触发
-                            nativeUpload.dispatchEvent(new Event('change', { bubbles: true }))
-                        }
-                    } catch (error) {
-                        console.log(error.message);
-                    }
-                    // 读取文本
-                    navigator.clipboard.readText().then(function (text) {
-                        if (!text) {
-                            return
-                        }
-                        // 此处可进行修改
-                        const modifiedText = text;
-
-                        const selection = monacoEditor.getSelection();
-                        monacoEditor.executeEdits("", [{
-                            range: selection,
-                            text: modifiedText,
-                            forceMoveMarkers: true
-                        }]);
-                    });
-                });
-
-                // 字数统计防抖
-                let debouncedCountWords = debounce(async () => {
-                    await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
-                    updateWordCount(countWords(getModelValue()))
-                }, 300)
-
-                // 文本修改时触发
-                monacoEditor.onDidChangeModelContent((event) => {
-                    debouncedCountWords()
-                });
-
-                // 光标位置变化时触发
-                monacoEditor.onDidChangeCursorPosition((event) => {
-                    updateCursorPosition(event.position)
-                });
-
-                // 选中内容变化时触发
-                monacoEditor.onDidChangeCursorSelection((event) => {
-                    updateSelectionCount(countWords(monacoEditor.getModel().getValueInRange(event.selection)))
-                });
-
-                // 初始化统计词数
-                updateWordCount(countWords(getModelValue()));
-                editorLoaded = true
+            monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
+                model: model,
+                theme: darkMode ? "vs-dark" : "vs-light",
+                automaticLayout: true,
+                unicodeHighlight: { ambiguousCharacters: false, },
+                fontFamily: 'Consolas, \'Courier New\', \'微软雅黑\'',
+                minimap: { enabled: false },
+                renderWhitespace: true,
             });
-        }
 
-        // 词数统计
-        function countWords(text) {
-            const chineseMatches = text.match(chineseRegex) || [];
-            const englishMatches = text.match(englishRegex) || [];
+            const removableIds = ['editor.action.revealDefinition'
+                , 'editor.action.goToReferences'
+                , 'editor.action.quickOutline'
+                , 'submenuitem.EditorContextPeek'
+                , 'vs.actions.separator'
+                , 'editor.action.rename'
+                , 'editor.action.changeAll'
+                , 'editor.action.formatDocument'
+                , 'editor.action.quickCommand'];
+            const contextmenu = monacoEditor.getContribution('editor.contrib.contextmenu');
+            const realMethod = contextmenu._getMenuActions;
+            contextmenu._getMenuActions = function () {
+                const items = realMethod.apply(contextmenu, arguments);
 
-            return chineseMatches.length + englishMatches.length;
-        }
+                return items.filter(function (item) {
+                    return !removableIds.includes(item.id);
+                });
+            };
 
-        // 更换编辑器颜色
-        function changeEditorTheme(v) {
-            darkMode = v;
-            monacoEditor.updateOptions({
-                theme: darkMode ? "vs-dark" : "vs-light"
-            })
-        }
-
-        // 获取编辑器当前内容
-        function getModelValue() {
-            const result = monacoEditor.getModel().getValue();
-            console.log(result.length)
-            return result;
-        }
-
-        // 设置编辑器当前内容
-        function setModelValue(value) {
-            return monacoEditor.getModel().setValue(value);
-        }
-
-        // 更新词数显示元素
-        function updateWordCount(count) {
-            const element = document.getElementById('wordCount')
-            if (element) {
-                element.innerText = `字数：${count}`
-            }
-        }
-
-        // 更新选中词数显示元素
-        function updateSelectionCount(count) {
-            const element = document.getElementById('selectionCount')
-            if (element) {
-                element.innerText = `选中：${count}`
-            }
-        }
-
-        // 清空状态防抖
-        var debouncedClearStatus = debounce(() => {
-            updateStatus('')
-        }, 3000)
-
-        // 更新状态显示, 3000ms后清空
-        function updateStatus(status) {
-            const element = document.getElementById('status')
-            if (element) {
-                element.innerText = status
-                debouncedClearStatus()
-            }
-        }
-
-        // 更新光标位置显示元素
-        function updateCursorPosition(pos) {
-            const element = document.getElementById('cursorPosition')
-            if (element) {
-                element.innerText = `行：${pos.lineNumber}, 列：${pos.column}`
-            }
-        }
-
-        // 更新 Tab 键表现文本
-        function updateTabStop(isTab, count) {
-            if (monacoEditor) {
-                monacoEditor.getModel().updateOptions({
-                    tabSize: count,
-                    insertSpaces: !isTab
-                })
-            }
-        }
-
-        // 更新编辑器只读状态
-        function updateEditorEnable(enable) {
-            monacoEditor.updateOptions({ readOnly: !enable })
-        }
-
-        // 工具栏编辑操作
-        function EditAction(action) {
-            console.log(`EditAction: ${action}`)
-            switch (action) {
-                case 'h1':
-                    ExecuteSingleLineEditAction(action, '# %%', '一级标题')
-                    break
-                case 'h2':
-                    ExecuteSingleLineEditAction(action, '## %%', '二级标题')
-                    break
-                case 'bold':
-                    ExecuteSingleLineEditAction(action, '**%%**', '粗体')
-                    break
-                case 'italic':
-                    ExecuteSingleLineEditAction(action, '*%%*', '斜体')
-                    break
-                case 'quote':
-                    ExecuteMultiLineEditAction(action, '\n> %%\n', '引用')
-                    break
-                case 'deleteLine':
-                    ExecuteSingleLineEditAction(action, '~%%~', '删除线')
-                    break
-                case 'code':
-                    ExecuteMultiLineEditAction(action, '\n```text\n%%\n```\n', '删除线')
-                    break
-                case 'link':
-                    ExecuteSingleLineEditAction(action, '[%%](URL)', '链接描述')
-                    break
-                case 'image':
-                    ExecuteSingleLineEditAction(action, '![%%](URL)', '图片alt描述')
-                    break
-                case 'ul':
-                    ExecuteListEditAction(action, '- %%')
-                    break
-                case 'ol':
-                    ExecuteListEditAction(action, 'd. %%')
-                    break
-            }
-        }
-
-        // 单行模板触发
-        function ExecuteSingleLineEditAction(action, format, hint) {
-            if (monacoEditor) {
+            monacoEditor.addAction({
+                id: 'select-all',
+                label: '全选',
+                contextMenuGroupId: 'navigation',
+                contextMenuOrder: 1.5,
+                run: function (ed) {
+                    ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
+                }
+            });
+            // 禁用默认快捷键
+            monaco.editor.addKeybindingRules([
+                {
+                    keybinding: monaco.KeyCode.F1,
+                    command: null,
+                },
+                {
+                    keybinding: monaco.KeyCode.F8,
+                    command: null,
+                },
+                {
+                    keybinding: monaco.KeyCode.F9,
+                    command: null,
+                },
+                {
+                    keybinding: monaco.KeyCode.F12,
+                    command: null,
+                },
+                {
+                    keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
+                    command: null,
+                },
+                {
+                    keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD,
+                    command: null,
+                },
+            ]);
+            // Ctrl + D 重复内容
+            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, function () {
                 const editor = monacoEditor
-                const model = monacoEditor.getModel()
-
+                const model = editor.getModel()
                 const selection = editor.getSelection();
                 const value = model.getValueInRange(selection)
-                let targetValue = format
-                // 检查是否有选中文本, 有则将原始提示文本替换
+                // 检查是否有选中内容
                 if (value) {
-                    hint = value
-                }
-
-                // 替换目标位置
-                targetValue = format.replace('%%', hint)
-                const hintStart = targetValue.indexOf(hint)
-                const hintLength = hint.length
-
-                editor.executeEdits(action, [{
-                    range: selection,
-                    text: targetValue,
-                    forceMoveMarkers: true
-                }]);
-
-                const position = editor.getPosition();
-                const startColumn = position.column - (targetValue.length - hintStart); // 当前位置为整个模板的结尾, 向前寻找文本第一个字符位置
-                const endColumn = startColumn + hintLength;
-
-                const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
-                // 选中提示或原始文本
-                editor.setSelection(range);
-                editor.revealRange(range);
-
-                editor.focus()
-            }
-        }
-
-        // 多行模板触发
-        function ExecuteMultiLineEditAction(action, format, hint) {
-            if (monacoEditor) {
-                const editor = monacoEditor
-                const model = monacoEditor.getModel()
-
-                const selection = editor.getSelection();
-                const value = model.getValueInRange(selection)
-                let targetValue = format
-                if (value) {
-                    hint = value
-                }
-
-                targetValue = format.replace('%%', hint)
-                const hintStart = targetValue.indexOf(hint)
-                const hintLength = hint.length
-                const lineCount = targetValue.split('\n').length
-                const hintLine = targetValue.split('\n').findIndex(x => x.includes(hint)) + 1
-
-                editor.executeEdits(action, [{
-                    range: selection,
-                    text: targetValue,
-                    forceMoveMarkers: true
-                }]);
-
-                const position = editor.getPosition();
-
-                const startLine = position.lineNumber - (lineCount - hintLine); // 寻找模板行数
-                const startColumn = model.getLineContent(startLine).indexOf(hint) + 1;
-                const endColumn = startColumn + hintLength;
-                const endLine = startLine;
-
-                const range = new monaco.Range(startLine, startColumn, endLine, endColumn);
-
-                editor.setSelection(range);
-                editor.revealRange(range);
-
-                editor.focus()
-            }
-        }
-
-        // 向编辑器当前位置添加自定义文本
-        function appendTextToEditor(str) {
-            monacoEditor.executeEdits("", [{
-                range: monacoEditor.getSelection(),
-                text: str,
-                forceMoveMarkers: true
-            }]);
-        }
-
-        // 列表模板触发
-        function ExecuteListEditAction(action, format, afterEditSelect = true) {
-            if (monacoEditor) {
-                const editor = monacoEditor
-                const model = monacoEditor.getModel()
-
-                const selection = editor.getSelection();
-                const startLine = selection.startLineNumber
-                const endLine = selection.endLineNumber
-                let maxColumn = 0
-                for (let i = startLine; i <= endLine; i++) {
-                    // 将有序列表替换为数值
-                    const content = format.replace('d.', `${i - startLine + 1}.`).replaceAll('%%', model.getLineContent(i))
-                    editor.executeEdits(action, [{
-                        range: new monaco.Range(i, 0, i, content.length),
-                        text: content,
+                    editor.executeEdits("repeat", [{
+                        range: selection,
+                        text: value + value,
                         forceMoveMarkers: true
                     }]);
-                    maxColumn = Math.max(maxColumn, content.length)
-                }
-                if (afterEditSelect) {
-                    const range = new monaco.Range(startLine, 1, endLine, maxColumn + 1);
+                    const position = editor.getPosition();
+                    const startLine = position.lineNumber;
+                    const startColumn = selection.startColumn + value.length;
+                    const endColumn = selection.endColumn + value.length;
+                    const endLine = startLine;
 
+                    const range = new monaco.Range(startLine, startColumn, endLine, endColumn);
+                    // 更新选中区域
                     editor.setSelection(range);
                     editor.revealRange(range);
-
                     editor.focus()
+                } else {
+                    // 未选中文本, 重复本行
+                    ExecuteListEditAction('repeat', '%%\n%%', false)
                 }
+            })
+
+            // 监听粘贴事件 有图片则上传
+            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, async () => {
+                try {
+                    const clipboardContents = await navigator.clipboard.read();
+                    for (const item of clipboardContents) {
+                        // 寻找图片元素
+                        const type = item.types.find(x => x.includes('image/'))
+                        if (!type || type.split('/').length !== 2) {
+                            continue
+                        }
+                        const extension = type.split('/')[1]
+                        const blob = await item.getType(type);
+                        const file = new File([blob], `.${extension}`)
+
+                        const nativeUpload = document.getElementById('nativeUpload')
+                        if (!nativeUpload) { 
+                            continue
+                        }
+                        // 构造InputFile参数
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file)
+
+                        // 检测是否已经修改过
+                        if (!nativeUpload.modify) {
+                            Object.defineProperty(nativeUpload, 'files', {
+                                value: dataTransfer.files,
+                                writable: true // 将元素设定为可修改
+                            });
+                            nativeUpload.modify = true
+                        } else {
+                            nativeUpload.files = dataTransfer.files
+                        }
+                        //事件触发
+                        nativeUpload.dispatchEvent(new Event('change', { bubbles: true }))
+                    }
+                } catch (error) {
+                    console.log(error.message);
+                }
+                // 读取文本
+                navigator.clipboard.readText().then(function (text) {
+                    if (!text) {
+                        return
+                    }
+                    // 此处可进行修改
+                    const modifiedText = text;
+
+                    const selection = monacoEditor.getSelection();
+                    monacoEditor.executeEdits("", [{
+                        range: selection,
+                        text: modifiedText,
+                        forceMoveMarkers: true
+                    }]);
+                });
+            });
+
+            // 字数统计防抖
+            let debouncedCountWords = debounce(async () => {
+                await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
+                updateWordCount(countWords(getModelValue()))
+            }, 300)
+
+            // 文本修改时触发
+            monacoEditor.onDidChangeModelContent((event) => {
+                debouncedCountWords()
+            });
+
+            // 光标位置变化时触发
+            monacoEditor.onDidChangeCursorPosition((event) => {
+                updateCursorPosition(event.position)
+            });
+
+            // 选中内容变化时触发
+            monacoEditor.onDidChangeCursorSelection((event) => {
+                updateSelectionCount(countWords(monacoEditor.getModel().getValueInRange(event.selection)))
+            });
+
+            // 初始化统计词数
+            updateWordCount(countWords(getModelValue()));
+            editorLoaded = true
+        });
+    }
+
+    // 词数统计
+    function countWords(text) {
+        const chineseMatches = text.match(chineseRegex) || [];
+        const englishMatches = text.match(englishRegex) || [];
+
+        return chineseMatches.length + englishMatches.length;
+    }
+
+    // 更换编辑器颜色
+    function changeEditorTheme(v) {
+        darkMode = v;
+        monacoEditor.updateOptions({
+            theme: darkMode ? "vs-dark" : "vs-light"
+        })
+    }
+
+    // 获取编辑器当前内容
+    function getModelValue() {
+        const result = monacoEditor.getModel().getValue();
+        console.log(result.length)
+        return result;
+    }
+
+    // 设置编辑器当前内容
+    function setModelValue(value) {
+        return monacoEditor.getModel().setValue(value);
+    }
+
+    // 更新词数显示元素
+    function updateWordCount(count) {
+        const element = document.getElementById('wordCount')
+        if (element) {
+            element.innerText = `字数：${count}`
+        }
+    }
+
+    // 更新选中词数显示元素
+    function updateSelectionCount(count) {
+        const element = document.getElementById('selectionCount')
+        if (element) {
+            element.innerText = `选中：${count}`
+        }
+    }
+
+    // 清空状态防抖
+    var debouncedClearStatus = debounce(() => {
+        updateStatus('')
+    }, 3000)
+
+    // 更新状态显示, 3000ms后清空
+    function updateStatus(status) {
+        const element = document.getElementById('status')
+        if (element) {
+            element.innerText = status
+            debouncedClearStatus()
+        }
+    }
+
+    // 更新光标位置显示元素
+    function updateCursorPosition(pos) {
+        const element = document.getElementById('cursorPosition')
+        if (element) {
+            element.innerText = `行：${pos.lineNumber}, 列：${pos.column}`
+        }
+    }
+
+    // 更新 Tab 键表现文本
+    function updateTabStop(isTab, count) {
+        if (monacoEditor) {
+            monacoEditor.getModel().updateOptions({
+                tabSize: count,
+                insertSpaces: !isTab
+            })
+        }
+    }
+
+    // 更新编辑器只读状态
+    function updateEditorEnable(enable) {
+        monacoEditor.updateOptions({ readOnly: !enable })
+    }
+
+    // 工具栏编辑操作
+    function EditAction(action) {
+        console.log(`EditAction: ${action}`)
+        switch (action) {
+            case 'h1':
+                ExecuteSingleLineEditAction(action, '# %%', '一级标题')
+                break
+            case 'h2':
+                ExecuteSingleLineEditAction(action, '## %%', '二级标题')
+                break
+            case 'bold':
+                ExecuteSingleLineEditAction(action, '**%%**', '粗体')
+                break
+            case 'italic':
+                ExecuteSingleLineEditAction(action, '*%%*', '斜体')
+                break
+            case 'quote':
+                ExecuteMultiLineEditAction(action, '\n> %%\n', '引用')
+                break
+            case 'deleteLine':
+                ExecuteSingleLineEditAction(action, '~%%~', '删除线')
+                break
+            case 'code':
+                ExecuteMultiLineEditAction(action, '\n```text\n%%\n```\n', '删除线')
+                break
+            case 'link':
+                ExecuteSingleLineEditAction(action, '[%%](URL)', '链接描述')
+                break
+            case 'image':
+                ExecuteSingleLineEditAction(action, '![%%](URL)', '图片alt描述')
+                break
+            case 'ul':
+                ExecuteListEditAction(action, '- %%')
+                break
+            case 'ol':
+                ExecuteListEditAction(action, 'd. %%')
+                break
+        }
+    }
+
+    // 单行模板触发
+    function ExecuteSingleLineEditAction(action, format, hint) {
+        if (monacoEditor) {
+            const editor = monacoEditor
+            const model = monacoEditor.getModel()
+
+            const selection = editor.getSelection();
+            const value = model.getValueInRange(selection)
+            let targetValue = format
+            // 检查是否有选中文本, 有则将原始提示文本替换
+            if (value) {
+                hint = value
+            }
+
+            // 替换目标位置
+            targetValue = format.replace('%%', hint)
+            const hintStart = targetValue.indexOf(hint)
+            const hintLength = hint.length
+
+            editor.executeEdits(action, [{
+                range: selection,
+                text: targetValue,
+                forceMoveMarkers: true
+            }]);
+
+            const position = editor.getPosition();
+            const startColumn = position.column - (targetValue.length - hintStart); // 当前位置为整个模板的结尾, 向前寻找文本第一个字符位置
+            const endColumn = startColumn + hintLength;
+
+            const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
+            // 选中提示或原始文本
+            editor.setSelection(range);
+            editor.revealRange(range);
+
+            editor.focus()
+        }
+    }
+
+    // 多行模板触发
+    function ExecuteMultiLineEditAction(action, format, hint) {
+        if (monacoEditor) {
+            const editor = monacoEditor
+            const model = monacoEditor.getModel()
+
+            const selection = editor.getSelection();
+            const value = model.getValueInRange(selection)
+            let targetValue = format
+            if (value) {
+                hint = value
+            }
+
+            targetValue = format.replace('%%', hint)
+            const hintStart = targetValue.indexOf(hint)
+            const hintLength = hint.length
+            const lineCount = targetValue.split('\n').length
+            const hintLine = targetValue.split('\n').findIndex(x => x.includes(hint)) + 1
+
+            editor.executeEdits(action, [{
+                range: selection,
+                text: targetValue,
+                forceMoveMarkers: true
+            }]);
+
+            const position = editor.getPosition();
+
+            const startLine = position.lineNumber - (lineCount - hintLine); // 寻找模板行数
+            const startColumn = model.getLineContent(startLine).indexOf(hint) + 1;
+            const endColumn = startColumn + hintLength;
+            const endLine = startLine;
+
+            const range = new monaco.Range(startLine, startColumn, endLine, endColumn);
+
+            editor.setSelection(range);
+            editor.revealRange(range);
+
+            editor.focus()
+        }
+    }
+
+    // 向编辑器当前位置添加自定义文本
+    function appendTextToEditor(str) {
+        monacoEditor.executeEdits("", [{
+            range: monacoEditor.getSelection(),
+            text: str,
+            forceMoveMarkers: true
+        }]);
+    }
+
+    // 列表模板触发
+    function ExecuteListEditAction(action, format, afterEditSelect = true) {
+        if (monacoEditor) {
+            const editor = monacoEditor
+            const model = monacoEditor.getModel()
+
+            const selection = editor.getSelection();
+            const startLine = selection.startLineNumber
+            const endLine = selection.endLineNumber
+            let maxColumn = 0
+            for (let i = startLine; i <= endLine; i++) {
+                // 将有序列表替换为数值
+                const content = format.replace('d.', `${i - startLine + 1}.`).replaceAll('%%', model.getLineContent(i))
+                editor.executeEdits(action, [{
+                    range: new monaco.Range(i, 0, i, content.length),
+                    text: content,
+                    forceMoveMarkers: true
+                }]);
+                maxColumn = Math.max(maxColumn, content.length)
+            }
+            if (afterEditSelect) {
+                const range = new monaco.Range(startLine, 1, endLine, maxColumn + 1);
+
+                editor.setSelection(range);
+                editor.revealRange(range);
+
+                editor.focus()
             }
         }
+    }
 
-    </script>
-    <style>
-        .divider {
-            border: 1px solid;
-            height: 50%;
-            width: 2px;
-            border-color: var(--mud-palette-divider);
-        }
+</script>
+<style>
+    .divider {
+        border: 1px solid;
+        height: 50%;
+        width: 2px;
+        border-color: var(--mud-palette-divider);
+    }
 
-        .mud-menu > button > span {
-            font-size: 1rem;
-        }
-    </style>
+    .mud-menu > button > span {
+        font-size: 1rem;
+    }
+</style>
 @code {
     Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
 
@@ -660,11 +660,14 @@
             {
                 return;
             }
-            // TODO: Config
-            string path = Path.Combine("bin\\Debug\\net8.0", "Upload");
+            var date = DateTime.Now;
+            string path = Path.Combine(AppConfig.HexoImagePath, date.Year.ToString(), date.Month.ToString());
             Directory.CreateDirectory(path);
-            // TODO: 文件名来源用户或随机
             string fileName = upload.Name;
+            if (!AppConfig.UseUploadFileName)
+            {
+                fileName = DateTime.Now.ToString("yyyyMMddHHmmss") + Path.GetExtension(fileName);
+            }
             if (fileName.StartsWith("."))
             {
                 fileName = DateTime.Now.ToString("yyyyMMddHHmmss") + fileName;
@@ -672,8 +675,7 @@
 
             await using FileStream writeStream = new(Path.Combine(path, fileName), FileMode.OpenOrCreate);
 
-            // TODO: Config
-            using var readStream = upload.OpenReadStream(10 * 1024 * 1024);
+            using var readStream = upload.OpenReadStream(AppConfig.MaxFileSize);
             var bytesRead = 0;
             var totalRead = 0;
             var buffer = new byte[1024 * 10];
