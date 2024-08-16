@@ -2,6 +2,7 @@
 @page "/"
 @inject IJSRuntime JS
 @inject IBrowserViewportService BrowserViewportService
+@inject ISnackbar SnackBar
 @implements IAsyncDisposable
 @implements IBrowserViewportObserver
 
@@ -153,6 +154,7 @@
                         ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
                     }
                 });
+                // 禁用默认快捷键
                 monaco.editor.addKeybindingRules([
                     {
                         keybinding: monaco.KeyCode.F1,
@@ -179,18 +181,44 @@
                         command: null,
                     },
                 ]);
-
+                // Ctrl + D 重复内容
                 monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, function () {
-                    ExecuteListEditAction('repeat', '%%\n%%', false)
+                    const editor = monacoEditor
+                    const model = editor.getModel()
+                    const selection = editor.getSelection();
+                    const value = model.getValueInRange(selection)
+                    // 检查是否有选中内容
+                    if (value) {
+                        editor.executeEdits("repeat", [{
+                            range: selection,
+                            text: value + value,
+                            forceMoveMarkers: true
+                        }]);
+                        const position = editor.getPosition();
+                        const startLine = position.lineNumber;
+                        const startColumn = selection.startColumn + value.length;
+                        const endColumn = selection.endColumn + value.length;
+                        const endLine = startLine;
+
+                        const range = new monaco.Range(startLine, startColumn, endLine, endColumn);
+                        // 更新选中区域
+                        editor.setSelection(range);
+                        editor.revealRange(range);
+                        editor.focus()
+                    } else {
+                        // 未选中文本, 重复本行
+                        ExecuteListEditAction('repeat', '%%\n%%', false)
+                    }
                 })
 
-                // 添加自定义粘贴操作
+                // 监听粘贴事件 有图片则上传
                 monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, async () => {
                     try {
                         const clipboardContents = await navigator.clipboard.read();
                         for (const item of clipboardContents) {
+                            // 寻找图片元素
                             const type = item.types.find(x => x.includes('image/'))
-                            if (!type && type.split('/').length === 2) {
+                            if (!type || type.split('/').length !== 2) {
                                 continue
                             }
                             const extension = type.split('/')[1]
@@ -201,29 +229,32 @@
                             if (!nativeUpload) { 
                                 continue
                             }
+                            // 构造InputFile参数
                             const dataTransfer = new DataTransfer();
                             dataTransfer.items.add(file)
 
+                            // 检测是否已经修改过
                             if (!nativeUpload.modify) {
                                 Object.defineProperty(nativeUpload, 'files', {
                                     value: dataTransfer.files,
-                                    writable: true
+                                    writable: true // 将元素设定为可修改
                                 });
                                 nativeUpload.modify = true
                             } else {
                                 nativeUpload.files = dataTransfer.files
                             }
-
+                            //事件触发
                             nativeUpload.dispatchEvent(new Event('change', { bubbles: true }))
                         }
                     } catch (error) {
                         console.log(error.message);
                     }
-
+                    // 读取文本
                     navigator.clipboard.readText().then(function (text) {
                         if (!text) {
                             return
                         }
+                        // 此处可进行修改
                         const modifiedText = text;
 
                         const selection = monacoEditor.getSelection();
@@ -235,28 +266,34 @@
                     });
                 });
 
+                // 字数统计防抖
                 let debouncedCountWords = debounce(async () => {
                     await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
                     updateWordCount(countWords(getModelValue()))
                 }, 300)
 
+                // 文本修改时触发
                 monacoEditor.onDidChangeModelContent((event) => {
                     debouncedCountWords()
                 });
 
+                // 光标位置变化时触发
                 monacoEditor.onDidChangeCursorPosition((event) => {
                     updateCursorPosition(event.position)
                 });
 
+                // 选中内容变化时触发
                 monacoEditor.onDidChangeCursorSelection((event) => {
                     updateSelectionCount(countWords(monacoEditor.getModel().getValueInRange(event.selection)))
                 });
 
+                // 初始化统计词数
                 updateWordCount(countWords(getModelValue()));
                 editorLoaded = true
             });
         }
 
+        // 词数统计
         function countWords(text) {
             const chineseMatches = text.match(chineseRegex) || [];
             const englishMatches = text.match(englishRegex) || [];
@@ -264,6 +301,7 @@
             return chineseMatches.length + englishMatches.length;
         }
 
+        // 更换编辑器颜色
         function changeEditorTheme(v) {
             darkMode = v;
             monacoEditor.updateOptions({
@@ -271,16 +309,19 @@
             })
         }
 
+        // 获取编辑器当前内容
         function getModelValue() {
             const result = monacoEditor.getModel().getValue();
             console.log(result.length)
             return result;
         }
 
+        // 设置编辑器当前内容
         function setModelValue(value) {
             return monacoEditor.getModel().setValue(value);
         }
 
+        // 更新词数显示元素
         function updateWordCount(count) {
             const element = document.getElementById('wordCount')
             if (element) {
@@ -288,6 +329,7 @@
             }
         }
 
+        // 更新选中词数显示元素
         function updateSelectionCount(count) {
             const element = document.getElementById('selectionCount')
             if (element) {
@@ -295,10 +337,12 @@
             }
         }
 
+        // 清空状态防抖
         var debouncedClearStatus = debounce(() => {
             updateStatus('')
         }, 3000)
 
+        // 更新状态显示, 3000ms后清空
         function updateStatus(status) {
             const element = document.getElementById('status')
             if (element) {
@@ -307,6 +351,7 @@
             }
         }
 
+        // 更新光标位置显示元素
         function updateCursorPosition(pos) {
             const element = document.getElementById('cursorPosition')
             if (element) {
@@ -314,6 +359,7 @@
             }
         }
 
+        // 更新 Tab 键表现文本
         function updateTabStop(isTab, count) {
             if (monacoEditor) {
                 monacoEditor.getModel().updateOptions({
@@ -323,10 +369,12 @@
             }
         }
 
+        // 更新编辑器只读状态
         function updateEditorEnable(enable) {
             monacoEditor.updateOptions({ readOnly: !enable })
         }
 
+        // 工具栏编辑操作
         function EditAction(action) {
             console.log(`EditAction: ${action}`)
             switch (action) {
@@ -366,6 +414,7 @@
             }
         }
 
+        // 单行模板触发
         function ExecuteSingleLineEditAction(action, format, hint) {
             if (monacoEditor) {
                 const editor = monacoEditor
@@ -374,10 +423,12 @@
                 const selection = editor.getSelection();
                 const value = model.getValueInRange(selection)
                 let targetValue = format
+                // 检查是否有选中文本, 有则将原始提示文本替换
                 if (value) {
                     hint = value
                 }
 
+                // 替换目标位置
                 targetValue = format.replace('%%', hint)
                 const hintStart = targetValue.indexOf(hint)
                 const hintLength = hint.length
@@ -389,11 +440,11 @@
                 }]);
 
                 const position = editor.getPosition();
-                const startColumn = position.column - (targetValue.length - hintStart);
+                const startColumn = position.column - (targetValue.length - hintStart); // 当前位置为整个模板的结尾, 向前寻找文本第一个字符位置
                 const endColumn = startColumn + hintLength;
 
                 const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
-
+                // 选中提示或原始文本
                 editor.setSelection(range);
                 editor.revealRange(range);
 
@@ -401,6 +452,7 @@
             }
         }
 
+        // 多行模板触发
         function ExecuteMultiLineEditAction(action, format, hint) {
             if (monacoEditor) {
                 const editor = monacoEditor
@@ -427,7 +479,7 @@
 
                 const position = editor.getPosition();
 
-                const startLine = position.lineNumber - (lineCount - hintLine);
+                const startLine = position.lineNumber - (lineCount - hintLine); // 寻找模板行数
                 const startColumn = model.getLineContent(startLine).indexOf(hint) + 1;
                 const endColumn = startColumn + hintLength;
                 const endLine = startLine;
@@ -441,8 +493,8 @@
             }
         }
 
+        // 向编辑器当前位置添加自定义文本
         function appendTextToEditor(str) {
-            console.log(str)
             monacoEditor.executeEdits("", [{
                 range: monacoEditor.getSelection(),
                 text: str,
@@ -450,6 +502,7 @@
             }]);
         }
 
+        // 列表模板触发
         function ExecuteListEditAction(action, format, afterEditSelect = true) {
             if (monacoEditor) {
                 const editor = monacoEditor
@@ -460,6 +513,7 @@
                 const endLine = selection.endLineNumber
                 let maxColumn = 0
                 for (let i = startLine; i <= endLine; i++) {
+                    // 将有序列表替换为数值
                     const content = format.replace('d.', `${i - startLine + 1}.`).replaceAll('%%', model.getLineContent(i))
                     editor.executeEdits(action, [{
                         range: new monaco.Range(i, 0, i, content.length),
@@ -636,10 +690,11 @@
             {
                 JS.InvokeVoidAsync("appendTextToEditor", $@"![{fileName}]({Path.Combine(path, fileName).Replace('\\', '/')})");
             });
+            SnackBar.Add("图片上传成功", Severity.Success);
         }
         catch (Exception e)
         {
-            // TODO: Exception
+            SnackBar.Add("上传图片失败，信息: " + e.Message, Severity.Error);
         }
         finally
         {
