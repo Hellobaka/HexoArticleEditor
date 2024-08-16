@@ -14,7 +14,7 @@
 <h1>monaco editor</h1>
 <MudButton OnClick="@GetModelValue">Get</MudButton>
 <MudButton OnClick="@SetModelValue">Set</MudButton>
-
+<InputFile OnChange="@OnNativeUpload" @ref="inputFile" id="nativeUpload" style="display: none" />
 <MudGrid>
     <MudItem sm="12" md="6">
         <div style="position: relative; resize: vertical; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px;">
@@ -33,6 +33,11 @@
                     <div class="divider" />
                     <MudTooltip Text="无序列表"><MudIconButton OnClick="@((e) => ToolAction("ul"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListBulleted" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="有序列表"><MudIconButton OnClick="@((e) => ToolAction("ol"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListNumbered" Color="Color.Inherit" /></MudTooltip>
+                    <MudFileUpload T="IBrowserFile" Accept=".png, .jpg, .bmp, .webp, .gif" FilesChanged="ImageUploaded" AppendMultipleFiles="false">
+                        <ActivatorContent>
+                            <MudIconButton Color="Color.Inherit" Icon="@Icons.Material.Filled.CloudUpload" />
+                        </ActivatorContent>
+                    </MudFileUpload>
                     @if (!ShowPreview)
                     {
                         <MudSpacer />
@@ -40,6 +45,7 @@
                     }
                 </MudToolBar>
             </MudPaper>
+            <MudProgressLinear Value="UploadProgress" Color="Color.Primary" />
             <div id="monaco_editor" style="height: calc(100% - 104px); min-height: 600px;" />
             <MudPaper Elevation="20" Style="position: sticky; bottom: 0; right: 16px; left: 0;">
                 <MudToolBar Style="height: 40px;">
@@ -179,9 +185,46 @@
                 })
 
                 // 添加自定义粘贴操作
-                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
+                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, async () => {
+                    try {
+                        const clipboardContents = await navigator.clipboard.read();
+                        for (const item of clipboardContents) {
+                            const type = item.types.find(x => x.includes('image/'))
+                            if (!type && type.split('/').length === 2) {
+                                continue
+                            }
+                            const extension = type.split('/')[1]
+                            const blob = await item.getType(type);
+                            const file = new File([blob], `.${extension}`)
+
+                            const nativeUpload = document.getElementById('nativeUpload')
+                            if (!nativeUpload) { 
+                                continue
+                            }
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file)
+
+                            if (!nativeUpload.modify) {
+                                Object.defineProperty(nativeUpload, 'files', {
+                                    value: dataTransfer.files,
+                                    writable: true
+                                });
+                                nativeUpload.modify = true
+                            } else {
+                                nativeUpload.files = dataTransfer.files
+                            }
+
+                            nativeUpload.dispatchEvent(new Event('change', { bubbles: true }))
+                        }
+                    } catch (error) {
+                        console.log(error.message);
+                    }
+
                     navigator.clipboard.readText().then(function (text) {
-                        const modifiedText = text + '123';
+                        if (!text) {
+                            return
+                        }
+                        const modifiedText = text;
 
                         const selection = monacoEditor.getSelection();
                         monacoEditor.executeEdits("", [{
@@ -280,30 +323,34 @@
             }
         }
 
+        function updateEditorEnable(enable) {
+            monacoEditor.updateOptions({ readOnly: !enable })
+        }
+
         function EditAction(action) {
             console.log(`EditAction: ${action}`)
-            switch (action){
+            switch (action) {
                 case 'h1':
                     ExecuteSingleLineEditAction(action, '# %%', '一级标题')
-                break
+                    break
                 case 'h2':
                     ExecuteSingleLineEditAction(action, '## %%', '二级标题')
-                break
+                    break
                 case 'bold':
                     ExecuteSingleLineEditAction(action, '**%%**', '粗体')
-                break
+                    break
                 case 'italic':
                     ExecuteSingleLineEditAction(action, '*%%*', '斜体')
-                break
+                    break
                 case 'quote':
                     ExecuteMultiLineEditAction(action, '\n> %%\n', '引用')
-                break
+                    break
                 case 'deleteLine':
                     ExecuteSingleLineEditAction(action, '~%%~', '删除线')
-                break
+                    break
                 case 'code':
                     ExecuteMultiLineEditAction(action, '\n```text\n%%\n```\n', '删除线')
-                break
+                    break
                 case 'link':
                     ExecuteSingleLineEditAction(action, '[%%](URL)', '链接描述')
                     break
@@ -394,6 +441,15 @@
             }
         }
 
+        function appendTextToEditor(str) {
+            console.log(str)
+            monacoEditor.executeEdits("", [{
+                range: monacoEditor.getSelection(),
+                text: str,
+                forceMoveMarkers: true
+            }]);
+        }
+
         function ExecuteListEditAction(action, format, afterEditSelect = true) {
             if (monacoEditor) {
                 const editor = monacoEditor
@@ -412,7 +468,7 @@
                     }]);
                     maxColumn = Math.max(maxColumn, content.length)
                 }
-                if (afterEditSelect){
+                if (afterEditSelect) {
                     const range = new monaco.Range(startLine, 1, endLine, maxColumn + 1);
 
                     editor.setSelection(range);
@@ -422,6 +478,7 @@
                 }
             }
         }
+
     </script>
     <style>
         .divider {
@@ -447,6 +504,10 @@
     public bool ShowPreview { get; set; } = true;
 
     public string TabStopDisplay { get; set; } = "空格：4";
+
+    public double UploadProgress { get; set; } = 0;
+
+    public InputFile inputFile { get; set; } = null;
 
     private MarkdownPreview Preview { get; set; }
 
@@ -533,5 +594,63 @@
     public async void ToolAction(string action)
     {
         await JS.InvokeVoidAsync("EditAction", action);
+    }
+
+    public async Task ImageUploaded(IBrowserFile upload)
+    {
+        UploadProgress = 0;
+        await JS.InvokeVoidAsync("updateEditorEnable", false);
+        try
+        {
+            if (upload == null)
+            {
+                return;
+            }
+            // TODO: Config
+            string path = Path.Combine("bin\\Debug\\net8.0", "Upload");
+            Directory.CreateDirectory(path);
+            // TODO: 文件名来源用户或随机
+            string fileName = upload.Name;
+            if (fileName.StartsWith("."))
+            {
+                fileName = DateTime.Now.ToString("yyyyMMddHHmmss") + fileName;
+            }
+
+            await using FileStream writeStream = new(Path.Combine(path, fileName), FileMode.OpenOrCreate);
+
+            // TODO: Config
+            using var readStream = upload.OpenReadStream(10 * 1024 * 1024);
+            var bytesRead = 0;
+            var totalRead = 0;
+            var buffer = new byte[1024 * 10];
+
+            while ((bytesRead = await readStream.ReadAsync(buffer)) != 0)
+            {
+                totalRead += bytesRead;
+                await writeStream.WriteAsync(buffer, 0, bytesRead);
+                UploadProgress = (totalRead / upload.Size) * 100;
+                StateHasChanged();
+            }
+            await JS.InvokeVoidAsync("updateEditorEnable", true);
+            await InvokeAsync(() =>
+            {
+                JS.InvokeVoidAsync("appendTextToEditor", $@"![{fileName}]({Path.Combine(path, fileName).Replace('\\', '/')})");
+            });
+        }
+        catch (Exception e)
+        {
+            // TODO: Exception
+        }
+        finally
+        {
+            UploadProgress = 0;
+            await JS.InvokeVoidAsync("updateEditorEnable", true);
+            StateHasChanged();
+        }
+    }
+
+    async Task OnNativeUpload(InputFileChangeEventArgs e)
+    {
+        await ImageUploaded(e.File);
     }
 }
