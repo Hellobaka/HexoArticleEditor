@@ -28,7 +28,7 @@
                     <MudTooltip Text="删除线"><MudIconButton OnClick="@((e) => ToolAction("deleteLine"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatStrikethrough" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="代码块"><MudIconButton OnClick="@((e) => ToolAction("code"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.CodeBlocks" Color="Color.Inherit" /></MudTooltip>
                     <div class="divider" />
-                    <MudTooltip Text="图片"><MudIconButton OnClick="@((e) => ToolAction("picture"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Imagesmode" Color="Color.Inherit" /></MudTooltip>
+                    <MudTooltip Text="图片"><MudIconButton OnClick="@((e) => ToolAction("image"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Imagesmode" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="链接"><MudIconButton OnClick="@((e) => ToolAction("link"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Link" Color="Color.Inherit" /></MudTooltip>
                     <div class="divider" />
                     <MudTooltip Text="无序列表"><MudIconButton OnClick="@((e) => ToolAction("ul"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatListBulleted" Color="Color.Inherit" /></MudTooltip>
@@ -147,34 +147,41 @@
                         ed.setSelection(new monaco.Range(1, 1, ed.getModel().getLineCount(), ed.getModel().getLineMaxColumn(ed.getModel().getLineCount())));
                     }
                 });
+                monaco.editor.addKeybindingRules([
+                    {
+                        keybinding: monaco.KeyCode.F1,
+                        command: null,
+                    },
+                    {
+                        keybinding: monaco.KeyCode.F8,
+                        command: null,
+                    },
+                    {
+                        keybinding: monaco.KeyCode.F9,
+                        command: null,
+                    },
+                    {
+                        keybinding: monaco.KeyCode.F12,
+                        command: null,
+                    },
+                    {
+                        keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
+                        command: null,
+                    },
+                    {
+                        keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD,
+                        command: null,
+                    },
+                ]);
 
-                monacoEditor.addAction({
-                    id: 'disable-paste',
-                    label: 'Disable Paste',
-                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV],
-                    run: function () {
-                        // Do nothing to disable the default paste action
-                    }
-                });
-
-                monacoEditor.addAction({
-                    id: 'disable-F12',
-                    label: 'Disable F12',
-                    keybindings: [monaco.KeyCode.F12],
-                    run: function () { }
-                });
-
-                monacoEditor.addAction({
-                    id: 'disable-F1',
-                    label: 'Disable F1',
-                    keybindings: [monaco.KeyCode.F1],
-                    run: function () { }
-                });
+                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, function () {
+                    ExecuteListEditAction('repeat', '%%\n%%', false)
+                })
 
                 // 添加自定义粘贴操作
                 monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, function () {
                     navigator.clipboard.readText().then(function (text) {
-                        const modifiedText = text;
+                        const modifiedText = text + '123';
 
                         const selection = monacoEditor.getSelection();
                         monacoEditor.executeEdits("", [{
@@ -277,21 +284,42 @@
             console.log(`EditAction: ${action}`)
             switch (action){
                 case 'h1':
-                    ExecuteEditAction(action, '# %%', '一级标题')
+                    ExecuteSingleLineEditAction(action, '# %%', '一级标题')
                 break
                 case 'h2':
-                    ExecuteEditAction(action, '## %%', '二级标题')
+                    ExecuteSingleLineEditAction(action, '## %%', '二级标题')
                 break
                 case 'bold':
-                    ExecuteEditAction(action, '**%%**', '粗体')
+                    ExecuteSingleLineEditAction(action, '**%%**', '粗体')
                 break
                 case 'italic':
-                    ExecuteEditAction(action, '*%%*', '斜体')
+                    ExecuteSingleLineEditAction(action, '*%%*', '斜体')
                 break
+                case 'quote':
+                    ExecuteMultiLineEditAction(action, '\n> %%\n', '引用')
+                break
+                case 'deleteLine':
+                    ExecuteSingleLineEditAction(action, '~%%~', '删除线')
+                break
+                case 'code':
+                    ExecuteMultiLineEditAction(action, '\n```text\n%%\n```\n', '删除线')
+                break
+                case 'link':
+                    ExecuteSingleLineEditAction(action, '[%%](URL)', '链接描述')
+                    break
+                case 'image':
+                    ExecuteSingleLineEditAction(action, '![%%](URL)', '图片alt描述')
+                    break
+                case 'ul':
+                    ExecuteListEditAction(action, '- %%')
+                    break
+                case 'ol':
+                    ExecuteListEditAction(action, 'd. %%')
+                    break
             }
         }
 
-        function ExecuteEditAction(action, format, hint) {
+        function ExecuteSingleLineEditAction(action, format, hint) {
             if (monacoEditor) {
                 const editor = monacoEditor
                 const model = monacoEditor.getModel()
@@ -314,7 +342,6 @@
                 }]);
 
                 const position = editor.getPosition();
-                const lineContent = model.getLineContent(position.lineNumber);
                 const startColumn = position.column - (targetValue.length - hintStart);
                 const endColumn = startColumn + hintLength;
 
@@ -324,6 +351,75 @@
                 editor.revealRange(range);
 
                 editor.focus()
+            }
+        }
+
+        function ExecuteMultiLineEditAction(action, format, hint) {
+            if (monacoEditor) {
+                const editor = monacoEditor
+                const model = monacoEditor.getModel()
+
+                const selection = editor.getSelection();
+                const value = model.getValueInRange(selection)
+                let targetValue = format
+                if (value) {
+                    hint = value
+                }
+
+                targetValue = format.replace('%%', hint)
+                const hintStart = targetValue.indexOf(hint)
+                const hintLength = hint.length
+                const lineCount = targetValue.split('\n').length
+                const hintLine = targetValue.split('\n').findIndex(x => x.includes(hint)) + 1
+
+                editor.executeEdits(action, [{
+                    range: selection,
+                    text: targetValue,
+                    forceMoveMarkers: true
+                }]);
+
+                const position = editor.getPosition();
+
+                const startLine = position.lineNumber - (lineCount - hintLine);
+                const startColumn = model.getLineContent(startLine).indexOf(hint) + 1;
+                const endColumn = startColumn + hintLength;
+                const endLine = startLine;
+
+                const range = new monaco.Range(startLine, startColumn, endLine, endColumn);
+
+                editor.setSelection(range);
+                editor.revealRange(range);
+
+                editor.focus()
+            }
+        }
+
+        function ExecuteListEditAction(action, format, afterEditSelect = true) {
+            if (monacoEditor) {
+                const editor = monacoEditor
+                const model = monacoEditor.getModel()
+
+                const selection = editor.getSelection();
+                const startLine = selection.startLineNumber
+                const endLine = selection.endLineNumber
+                let maxColumn = 0
+                for (let i = startLine; i <= endLine; i++) {
+                    const content = format.replace('d.', `${i - startLine + 1}.`).replaceAll('%%', model.getLineContent(i))
+                    editor.executeEdits(action, [{
+                        range: new monaco.Range(i, 0, i, content.length),
+                        text: content,
+                        forceMoveMarkers: true
+                    }]);
+                    maxColumn = Math.max(maxColumn, content.length)
+                }
+                if (afterEditSelect){
+                    const range = new monaco.Range(startLine, 1, endLine, maxColumn + 1);
+
+                    editor.setSelection(range);
+                    editor.revealRange(range);
+
+                    editor.focus()
+                }
             }
         }
     </script>
