@@ -1,0 +1,187 @@
+﻿@using HexoArticleEditor.Model
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+
+<div id="metaData" class="pa-4">
+    <div style="display: flex; align-items: baseline;">
+        <MudTextField T="string" Label="标题" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="MetaData.Title"></MudTextField>
+        <MudButton Color="Color.Primary" OnClick="@OnSaveClicked">保存</MudButton>
+    </div>
+    <div class="d-flex flex-column align-center">
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="SwitchMetaDataDisplay">显示更多/更少</MudButton>
+    </div>
+    <MudDivider />
+    <MudCollapse Expanded="MetaDataDisplay">
+        <div class="pa-2">
+            <div style="display:flex; align-items: baseline;">
+                <MudText Style="margin-right: 10px; margin-bottom: 10px;">时间:</MudText>
+                <MudButton Color="Color.Secondary" OnClick="ChangeTimeToNow">当前时刻</MudButton>
+                <MudDatePicker PickerVariant="PickerVariant.Dialog" Label="日期" @bind-Date="MetaData.CreateDate" />
+                <MudTimePicker PickerVariant="PickerVariant.Dialog" Label="时间" TimeFormat="HH:mm:ss" @bind-Time="MetaData.CreateTime" />
+            </div>
+            <div style="display:flex; align-items: baseline; margin-top: 10px;">
+                <MudText Style="margin-right: 10px; margin-bottom: 10px;">Tags:</MudText>
+                <MudTextField T="string" @ref="TagTextField" Variant="Variant.Text" @bind-Value="TagInput" Label="输入Tag" Margin="Margin.None" OnKeyDown="OnTagInput"></MudTextField>
+            </div>
+            <MudChipSet T="string" AllClosable Style="margin-left: 45px;" OnClose="OnTagDeleted">
+                @foreach (var tag in MetaData.Tags)
+                {
+                    <MudChip Color="Color.Secondary" Text="@tag"></MudChip>
+                }
+            </MudChipSet>
+            <div style="display:flex; align-items: baseline; margin-top: 10px;">
+                <MudText Style="margin-right: 10px; margin-bottom: 10px;">分类:</MudText>
+                <MudTextField T="string" @ref="CategoryTextField" Variant="Variant.Text" @bind-Value="CategoryInput" Label="输入分类" Margin="Margin.None" OnKeyDown="OnCategoryInput"></MudTextField>
+            </div>
+            <MudChipSet T="string" AllClosable Style="margin-left: 45px;" OnClose="OnCategoryDeleted">
+                @foreach (var categroy in MetaData.Categories)
+                {
+                    <MudChip Color="Color.Tertiary" Text="@categroy"></MudChip>
+                }
+            </MudChipSet>
+            <div style="display:flex; align-items: flex-start; margin-top: 10px;">
+                <MudText Style="margin-right: 10px; margin-bottom: 10px;">头图:</MudText>
+                <MudImage onclick="@(() => OnHeadImageClicked())" Fluid="true" Src="https://mudblazor.com/images/iceland.jpg" Class="rounded-lg" />
+            </div>
+        </div>
+    </MudCollapse>
+</div>
+
+<MudDialog @ref="UploadDialog">
+    <DialogContent>
+        <MudStack>
+            <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles">
+                <ActivatorContent>
+                    <MudButton Color="Color.Primary">上传图片</MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Secondary" OnClick="@(() => CloseDialog(false))">关闭</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@(() => CloseDialog(true))">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public MetaData MetaData { get; set; } = new();
+
+    [Parameter]
+    public EventCallback OnMetaDataSaved { get; set; }
+
+    private bool MetaDataDisplay { get; set; } = false;
+
+    private IList<IBrowserFile> _files = new List<IBrowserFile>();
+
+    private MudDialog UploadDialog { get; set; }
+
+    private string TagInput { get; set; }
+
+    private string CategoryInput { get; set; }
+
+    private MudTextField<string> TagTextField { get; set; }
+
+    private MudTextField<string> CategoryTextField { get; set; }
+
+    private void SwitchMetaDataDisplay()
+    {
+        MetaDataDisplay = !MetaDataDisplay;
+    }
+
+    private async void OnHeadImageClicked()
+    {
+        await UploadDialog.ShowAsync("修改头图", new DialogOptions
+            {
+                FullWidth = true,
+                BackdropClick = false,
+                CloseOnEscapeKey = false,
+            });
+    }
+
+    private async void OnSaveClicked()
+    {
+        await OnMetaDataSaved.InvokeAsync();
+    }
+
+    private async void CloseDialog(bool result)
+    {
+        await UploadDialog.CloseAsync(result ? DialogResult.Ok(true) : DialogResult.Cancel());
+    }
+
+    private void UploadFiles(IBrowserFile file)
+    {
+        _files.Add(file);
+        //TODO upload the files to the server
+    }
+
+    private void OnTagDeleted(MudChip<string> chip)
+    {
+        MetaData.Tags.Remove(chip?.Text);
+        StateHasChanged();
+    }
+
+    private void OnCategoryDeleted(MudChip<string> chip)
+    {
+        MetaData.Categories.Remove(chip?.Text);
+        StateHasChanged();
+    }
+
+    private async void OnTagInput(KeyboardEventArgs e)
+    {
+        if (e.Code.ToLower().Contains("enter"))
+        {
+            await TagTextField.BlurAsync();
+            if (string.IsNullOrEmpty(TagInput))
+            {
+                return;
+            }
+            if (MetaData.Tags.Any(x => x == TagInput))
+            {
+                Snackbar.Add("Tag 重复添加", Severity.Warning);
+                return;
+            }
+            else
+            {
+                MetaData.Tags.Add(TagInput);
+                TagInput = "";
+
+                await TagTextField.SetText("");
+                await TagTextField.FocusAsync();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async void OnCategoryInput(KeyboardEventArgs e)
+    {
+        if (e.Code.ToLower().Contains("enter"))
+        {
+            await CategoryTextField.BlurAsync();
+            if (string.IsNullOrEmpty(CategoryInput))
+            {
+                return;
+            }
+            if (MetaData.Categories.Any(x => x == CategoryInput))
+            {
+                Snackbar.Add("分类重复添加", Severity.Warning);
+                return;
+            }
+            else
+            {
+                MetaData.Categories.Add(CategoryInput);
+                CategoryInput = "";
+
+                await CategoryTextField.SetText("");
+                await CategoryTextField.FocusAsync();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void ChangeTimeToNow()
+    {
+        MetaData.CreateDate = DateTime.Now;
+        MetaData.CreateTime = new TimeSpan(DateTime.Now.Hour, DateTime.Now.Minute, DateTime.Now.Second);
+    }
+}

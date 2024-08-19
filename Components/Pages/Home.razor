@@ -12,15 +12,14 @@
 <script src="marked.min.js"></script>
 <script src="vs/loader.js"></script>
 
-<h1>monaco editor</h1>
-<MudButton OnClick="@GetModelValue">Get</MudButton>
-<MudButton OnClick="@SetModelValue">Set</MudButton>
 <InputFile OnChange="@OnNativeUpload" @ref="inputFile" id="nativeUpload" style="display: none" />
 <MudGrid>
     <MudItem sm="12" md="6">
         <div style="position: relative; resize: vertical; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px;">
             <MudPaper Elevation="20">
-                <MudToolBar>
+                <MetaDataEditor />
+
+                <MudToolBar id="editToolBar">
                     <MudTooltip Text="一级标题"><MudIconButton OnClick="@((e) => ToolAction("h1"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="二级标题"><MudIconButton OnClick="@((e) => ToolAction("h2"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH2" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="粗体"><MudIconButton OnClick="@((e) => ToolAction("bold"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatBold" Color="Color.Inherit" /></MudTooltip>
@@ -42,7 +41,7 @@
                     @if (!ShowPreview)
                     {
                         <MudSpacer />
-                        <MudTooltip Text="预览"><MudIconButton OnClick="PreviewShowAndRefresh" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Preview" Color="Color.Primary" /></MudTooltip>
+                        <MudTooltip Text="预览"><MudIconButton OnClick="PreviewShowAndRefresh" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Preview" Color="Color.Secondary" /></MudTooltip>
                     }
                 </MudToolBar>
             </MudPaper>
@@ -75,8 +74,15 @@
             <MarkdownPreview @ref="Preview" />
         </MudItem>
     }
-    </MudGrid>
-<MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="1" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
+</MudGrid>
+
+<MudDrawer Width="300px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
+    <div class="pa-2">
+        <ArticlesList />
+    </div>
+</MudDrawer>
+
+<MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="10" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
     <MarkdownPreview @ref="Preview" />
 </MudDrawer>
 
@@ -397,7 +403,7 @@
                 ExecuteSingleLineEditAction(action, '~%%~', '删除线')
                 break
             case 'code':
-                ExecuteMultiLineEditAction(action, '\n```text\n%%\n```\n', '删除线')
+                ExecuteMultiLineEditAction(action, '\n```text\n%%\n```\n', '代码块')
                 break
             case 'link':
                 ExecuteSingleLineEditAction(action, '[%%](URL)', '链接描述')
@@ -546,7 +552,7 @@
         font-size: 1rem;
     }
 </style>
-@code {
+    @code {
     Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
 
     ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
@@ -556,6 +562,10 @@
         };
 
     public bool ShowPreview { get; set; } = true;
+
+    public bool ArticleListDisplay { get; set; }
+
+    public bool TerminalDisplay { get; set; } = false;
 
     public string TabStopDisplay { get; set; } = "空格：4";
 
@@ -581,6 +591,8 @@
         if (firstRender)
         {
             Common.DarkThemeChanged += DarkThemeChanged;
+            Common.ArticleListClicked += ArticleListDisplayChanged;
+            Common.TerminalClicked += TerminalDisplayChanged;
             await JS.InvokeVoidAsync("initEditor", PageInstance);
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
         }
@@ -590,6 +602,8 @@
     {
         await BrowserViewportService.UnsubscribeAsync(this);
         Common.DarkThemeChanged -= DarkThemeChanged;
+        Common.ArticleListClicked -= ArticleListDisplayChanged;
+        Common.TerminalClicked -= TerminalDisplayChanged;
     }
 
     public async void DarkThemeChanged(bool darkTheme)
@@ -709,5 +723,17 @@
     async Task OnNativeUpload(InputFileChangeEventArgs e)
     {
         await ImageUploaded(e.File);
+    }
+
+    private async void ArticleListDisplayChanged()
+    {
+        ArticleListDisplay = !ArticleListDisplay;
+        await InvokeAsync(() => StateHasChanged());
+    }
+
+    private async void TerminalDisplayChanged()
+    {
+        TerminalDisplay = !TerminalDisplay;
+        await InvokeAsync(() => StateHasChanged());
     }
 }
