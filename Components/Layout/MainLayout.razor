@@ -5,16 +5,17 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
-        <MudText Typo="Typo.h5" Class="ml-3">Application</MudText>
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudMenu Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+            <MudMenuItem OnClick="@(() => Common.InvokeArticleListClicked())">文章列表</MudMenuItem>
+            <MudMenuItem OnClick="@(() => Common.InvokeTerminalClicked())">终端</MudMenuItem>
+            <MudMenuItem>设置</MudMenuItem>
+        </MudMenu>
+        <MudText Typo="Typo.h5" Class="ml-3">HexoAritcleEditor</MudText>
         <MudSpacer />
         <MudIconButton Icon="@(DarkLightModeButtonIcon)" Color="Color.Inherit" OnClick="@DarkModeToggle" />
-        <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.ExitToApp" />
+        <MudIconButton Color="Color.Secondary" Icon="@Icons.Material.Filled.ExitToApp" />
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-        <NavMenu />
-    </MudDrawer>
     <MudMainContent Class="mt-16 pa-4" Style="height: calc(100vh - 70px)">
         @Body
     </MudMainContent>

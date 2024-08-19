@@ -16,8 +16,6 @@ namespace HexoArticleEditor
 
         private static object WriteLock { get; set; } = new object();
 
-        private static JObject CurrentJObject { get; set; }
-
         /// <summary>
         /// 读取配置
         /// </summary>
