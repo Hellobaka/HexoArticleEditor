@@ -1,0 +1,24 @@
+﻿
+<div style="display: flex; align-items: baseline;" id="terminalContainer">
+    <MudSpacer/>
+    <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.Close" OnClick="@(() => Common.InvokeTerminalClicked())"></MudIconButton>
+</div>
+<MudTextField T="string" Label="输出" Variant="Variant.Outlined" Text="@TerminalOutput" Lines="5" MaxLines="10" AutoGrow />
+<div style="display: flex; align-items: baseline;" id="terminalContainer">
+    <MudSelect T="string" Label="命令" Variant="Variant.Filled" AnchorOrigin="Origin.BottomCenter" Margin="Margin.Dense">
+        @foreach(var item in Commands)
+        {
+            <MudSelectItem T="string" Value="@item"/>
+        }
+    </MudSelect>
+    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success"></MudIconButton>
+    <MudIconButton Icon="@Icons.Material.Filled.Stop" Color="Color.Secondary"></MudIconButton>
+</div>
+<MudScrollToTop Selector="#terminalContainer" Style="z-index:2001;">
+    <MudFab Style="position: fixed; right: 10px; bottom: 20px;" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowCircleUp" />
+</MudScrollToTop>
+@code {
+    private List<string> Commands { get; set; } = ["hexo generate", "hexo clean"];
+
+    private string TerminalOutput { get; set; } = "";
+}
