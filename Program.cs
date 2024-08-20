@@ -62,7 +62,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
-builder.Services.AddServerSideBlazor().AddHubOptions(opt => { opt.MaximumReceiveMessageSize = AppConfig.MaxFileSize; });
+builder.Services.AddSignalR(e => { e.MaximumReceiveMessageSize = AppConfig.MaxFileSize; }); 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
