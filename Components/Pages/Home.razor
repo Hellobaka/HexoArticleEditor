@@ -15,7 +15,7 @@
 <InputFile OnChange="@OnNativeUpload" @ref="inputFile" id="nativeUpload" style="display: none" />
 <MudGrid>
     <MudItem sm="12" md="6">
-        <div style="position: relative; resize: vertical; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px;">
+        <div id="editorContainer" style="position: relative; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px; transition: height 0.5s;" class="long-editor">
             <MudPaper Elevation="20">
                 <MetaDataEditor />
 
@@ -46,7 +46,7 @@
                 </MudToolBar>
             </MudPaper>
             <MudProgressLinear Value="UploadProgress" Color="Color.Primary" />
-            <div id="monaco_editor" style="height: calc(100% - 104px); min-height: 600px;" />
+            <div id="monaco_editor" style="height: calc(100% - 230px); min-height: 150px;" />
             <MudPaper Elevation="20" Style="position: sticky; bottom: 0; right: 16px; left: 0;">
                 <MudToolBar Style="height: 40px;">
                     <MudText id="wordCount">字数：0</MudText>
@@ -76,7 +76,7 @@
     }
 </MudGrid>
 
-<MudDrawer Width="300px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
+<MudDrawer Width="350px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
     <div class="pa-2">
         <ArticlesList />
     </div>
@@ -85,6 +85,10 @@
 <MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="10" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
     <MarkdownPreview @ref="Preview" />
 </MudDrawer>
+
+<div class="hidden" id="terminalContainer">
+    <HexoTerminal />
+</div>
 
 <script>
     function debounce(func, wait) {
@@ -539,6 +543,24 @@
         }
     }
 
+    function toggleTerminalVisibility(visible) {
+        const terminal = document.getElementById('terminalContainer');
+        const editor = document.getElementById('editorContainer')
+        if (!terminal || !editor) {
+            return
+        }
+
+        if (visible) {
+            terminal.classList.remove('hidden')
+            editor.classList.remove('long-editor')
+            editor.classList.add('short-editor')
+        } else {
+            terminal.classList.add('hidden')
+            editor.classList.add('long-editor')
+            editor.classList.remove('short-editor')
+        }
+    }
+
 </script>
 <style>
     .divider {
@@ -550,6 +572,17 @@
 
     .mud-menu > button > span {
         font-size: 1rem;
+    }
+
+    .long-editor {
+        height: calc(100vh - 88px);
+    }
+
+    .short-editor{
+        height: calc(100vh - 368px);
+    }
+    .hidden {
+        display: none;
     }
 </style>
     @code {
@@ -735,5 +768,6 @@
     {
         TerminalDisplay = !TerminalDisplay;
         await InvokeAsync(() => StateHasChanged());
+        await JS.InvokeVoidAsync("toggleTerminalVisibility", TerminalDisplay);
     }
 }
