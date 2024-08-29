@@ -1,4 +1,5 @@
-﻿@using MudBlazor.Services
+﻿@using HexoArticleEditor.Model
+@using MudBlazor.Services
 @page "/"
 @inject IJSRuntime JS
 @inject IBrowserViewportService BrowserViewportService
@@ -17,7 +18,7 @@
     <MudItem sm="12" md="6">
         <div id="editorContainer" style="position: relative; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px; transition: height 0.5s;" class="long-editor">
             <MudPaper Elevation="20">
-                <MetaDataEditor />
+                <MetaDataEditor MetaData="@CurrentArticle.MetaData" @ref="MetaDataEditorInstance" OnMetaDataSaved="NoticeMonacoEditorSaved" />
 
                 <MudToolBar id="editToolBar">
                     <MudTooltip Text="一级标题"><MudIconButton OnClick="@((e) => ToolAction("h1"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
@@ -46,7 +47,16 @@
                 </MudToolBar>
             </MudPaper>
             <MudProgressLinear Value="UploadProgress" Color="Color.Primary" />
-            <div id="monaco_editor" style="height: calc(100% - 230px); min-height: 150px;" />
+
+            <div id="monaco_editor" style="height: calc(100% - 230px); min-height: 150px; position: relative;">
+                <MudOverlay DarkBackground="true" Absolute="true" Visible="@Loading">
+                    <div style="display: flex; justify-content: center; align-items: stretch;">
+                        <MudProgressCircular Color="Color.Secondary" Indeterminate="true" Size="Size.Small" />
+                        <MudText style="margin-left: 10px; margin-bottom: 10px;">正在拉取文章...</MudText>
+                    </div>
+                </MudOverlay>
+            </div>
+
             <MudPaper Elevation="20" Style="position: sticky; bottom: 0; right: 16px; left: 0;">
                 <MudToolBar Style="height: 40px;">
                     <MudText id="wordCount">字数：0</MudText>
@@ -116,6 +126,7 @@
     var monacoEditor = {};
     var homePage = {}
     var editorLoaded = false
+    var modelList = []
 
     function initEditor(blazorPageInstance) {
         homePage = blazorPageInstance
@@ -191,6 +202,12 @@
                     command: null,
                 },
             ]);
+            
+            // Ctrl + S 保存内容
+            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async function () {
+                await homePage.invokeMethodAsync('NoticeMonacoEditorSaved');
+            })
+
             // Ctrl + D 重复内容
             monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, function () {
                 const editor = monacoEditor
@@ -278,6 +295,7 @@
 
             // 字数统计防抖
             let debouncedCountWords = debounce(async () => {
+                await homePage.invokeMethodAsync('NoticeRefreshPreview');
                 await homePage.invokeMethodAsync('NoticeMonacoEditorTextChanged');
                 updateWordCount(countWords(getModelValue()))
             }, 300)
@@ -319,16 +337,24 @@
         })
     }
 
-    // 获取编辑器当前内容
+    // 获取编辑器当前Model内容
     function getModelValue() {
         const result = monacoEditor.getModel().getValue();
         console.log(result.length)
         return result;
     }
 
-    // 设置编辑器当前内容
-    function setModelValue(value) {
-        return monacoEditor.getModel().setValue(value);
+    // 设置编辑器当前Model
+    function setModelValue(modelName, value) {
+        if (modelList[modelName]){
+            // modelList[modelName].setValue(value);
+            monacoEditor.setModel(modelList[modelName])
+        } else {
+            const model = monaco.editor.createModel(value, 'markdown', monaco.Uri.parse(`file://${modelName}.md`))
+            modelList[modelName] = model
+            monacoEditor.setModel(model)
+        }
+        homePage.invokeMethodAsync('NoticeRefreshPreview');
     }
 
     // 更新词数显示元素
@@ -561,6 +587,11 @@
         }
     }
 
+    window.addEventListener('beforeunload', (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    });
+
 </script>
 <style>
     .divider {
@@ -596,6 +627,8 @@
 
     public bool ShowPreview { get; set; } = true;
 
+    public bool Loading { get; set; }
+
     public bool ArticleListDisplay { get; set; }
 
     public bool TerminalDisplay { get; set; } = false;
@@ -608,11 +641,15 @@
 
     private MarkdownPreview Preview { get; set; }
 
+    private MetaDataEditor MetaDataEditorInstance { get; set; }
+
     private bool PreviewDrawerOpen { get; set; }
 
     private DotNetObjectReference<Home>? PageInstance { get; set; }
 
     private Debouncer Debouncer { get; set; } = new();
+
+    private Article CurrentArticle { get; set; } = new();
 
     protected override void OnInitialized()
     {
@@ -626,6 +663,7 @@
             Common.DarkThemeChanged += DarkThemeChanged;
             Common.ArticleListClicked += ArticleListDisplayChanged;
             Common.TerminalClicked += TerminalDisplayChanged;
+            Common.OnCurrentArticleChanged += OnCurrentArticleChanged;
             await JS.InvokeVoidAsync("initEditor", PageInstance);
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
         }
@@ -637,6 +675,7 @@
         Common.DarkThemeChanged -= DarkThemeChanged;
         Common.ArticleListClicked -= ArticleListDisplayChanged;
         Common.TerminalClicked -= TerminalDisplayChanged;
+        Common.OnCurrentArticleChanged -= OnCurrentArticleChanged;
     }
 
     public async void DarkThemeChanged(bool darkTheme)
@@ -651,9 +690,9 @@
         return str;
     }
 
-    public async void SetModelValue()
+    public async Task SetModelValue(string modelName, string content)
     {
-        await JS.InvokeVoidAsync("setModelValue", "hello world.");
+        await JS.InvokeVoidAsync("setModelValue", modelName, content);
     }
 
     public async void PreviewShowAndRefresh()
@@ -678,12 +717,35 @@
     }
 
     [JSInvokable]
-    public void NoticeMonacoEditorTextChanged()
+    public void NoticeRefreshPreview()
     {
         Debouncer.Debounce(async () =>
         {
             await Preview.ReloadFrame();
         }, 300);
+    }
+
+    [JSInvokable]
+    public void NoticeMonacoEditorTextChanged()
+    {
+        Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
+    }
+
+    [JSInvokable]
+    public async void NoticeMonacoEditorSaved()
+    {
+        try
+        {
+            string content = await JS.InvokeAsync<string>("getModelValue");
+            string metaDataRaw = MetaDataEditorInstance.GetMetaData().ParseToRaw();
+            File.WriteAllText(CurrentArticle.FilePath, metaDataRaw + content);
+            Common.InvokeArticleSaveStateChanged(CurrentArticle, true);
+            SnackBar.Add($"文章已保存", Severity.Success);
+        }
+        catch(Exception e)
+        {
+            SnackBar.Add($"保存文章时发生异常: {e.Message}", Severity.Error);
+        }
     }
 
     public async void TabStopChanged(bool isTab, int count)
@@ -770,4 +832,29 @@
         await InvokeAsync(() => StateHasChanged());
         await JS.InvokeVoidAsync("toggleTerminalVisibility", TerminalDisplay);
     }
+
+    public async void OnCurrentArticleChanged(Article article)
+    {
+        Loading = true;
+        await Task.Run(async () =>
+        {
+            if (File.Exists(article.FilePath))
+            {
+                CurrentArticle = article;
+                string content = File.ReadAllText(article.FilePath);
+                if (MetaData.ParseFromRaw(content, out MetaData? metaData, out string remain))
+                {
+                    article.MetaData = metaData;
+                    content = remain;
+                }
+                await SetModelValue(article.Name, content);
+            }
+            else
+            {
+                SnackBar.Add($"文章 {article.Name} 文件不存在，无法读取", Severity.Error);
+            }
+        });
+        Loading = false;
+        await InvokeAsync(() => StateHasChanged());
+ }
 }
