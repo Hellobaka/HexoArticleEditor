@@ -10,5 +10,6 @@
     <PackageReference Include="MudBlazor" Version="7.*" />
     <PackageReference Include="MudBlazor.FontIcons.MaterialSymbols" Version="1.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="YamlDotNet" Version="16.0.0" />
   </ItemGroup>
 </Project>
