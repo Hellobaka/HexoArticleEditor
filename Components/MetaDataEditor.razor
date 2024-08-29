@@ -64,8 +64,23 @@
 </MudDialog>
 
 @code {
+    private MetaData _metaData = new();
+
     [Parameter]
-    public MetaData MetaData { get; set; } = new();
+    public MetaData MetaData
+    {
+        get => _metaData;
+
+        set
+        {
+            if(value == null)
+            {
+                return;
+            }
+            _metaData = value;
+            StateHasChanged();
+        }
+    }
 
     [Parameter]
     public EventCallback OnMetaDataSaved { get; set; }
@@ -83,6 +98,11 @@
     private MudTextField<string> TagTextField { get; set; }
 
     private MudTextField<string> CategoryTextField { get; set; }
+
+    public MetaData GetMetaData()
+    {
+        return MetaData;
+    }
 
     private void SwitchMetaDataDisplay()
     {
