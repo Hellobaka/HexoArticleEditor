@@ -1,39 +1,150 @@
-﻿
+﻿@using HexoArticleEditor.Model
+@implements IAsyncDisposable
+
 <div style="display: flex;">
     <MudButton Variant="Variant.Text" Color="Color.Primary">新建</MudButton>
     <MudButton Variant="Variant.Text" Color="Color.Secondary">保存全部</MudButton>
     <MudSpacer />
     <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.Close" OnClick="@(() => Common.InvokeArticleListClicked())"></MudIconButton>
 </div>
-<MudTextField T="string" Label="搜点什么？" Variant="Variant.Outlined" Clearable Margin="Margin.Dense"></MudTextField>
-<MudList T="string" @bind-SelectedValues="SelectedValues" Dense="true" SelectionMode="SelectionMode.MultiSelection" CheckBoxColor="Color.Primary">
-    <MudListSubheader>双击以载入文章</MudListSubheader>
-    <MudListItem Text="123">
-        <div style="display: flex;">
-            <MudText>123</MudText>
+<MudTextField T="string" Label="搜点什么？" Text="@Search" TextChanged="OnSearchChanged" Variant="Variant.Outlined" Clearable Margin="Margin.Dense"></MudTextField>
+<MudList T="string" SelectedValues="SelectedValues" SelectedValue="CurrentArticle" Dense="true" SelectionMode="@(MultiSelect ? SelectionMode.MultiSelection: SelectionMode.SingleSelection)" CheckBoxColor="Color.Primary" SelectedValueChanged="OnSelectedArticleChanged" SelectedValuesChanged="OnSelectedArticlesChanged">
+    <MudListSubheader>
+        <div style="display: flex; align-items: center;">
+            <MudSwitch T="bool" Value="MultiSelect" Color="Color.Primary" ValueChanged="OnMultiSelectChanged">多选</MudSwitch>
             <MudSpacer />
-            <MudTooltip Text="未保存"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Warning" Size="Size.Small" /></MudTooltip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Secondary" OnClick="LoadArticleList"></MudIconButton>
         </div>
-    </MudListItem>
-    <MudListItem Text="456">
-        <div style="display: flex;">
-            <MudText>456</MudText>
-            <MudSpacer />
-            <MudTooltip Text="已打开"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Info" Size="Size.Small" /></MudTooltip>
+    </MudListSubheader>
+    @if (Loading)
+    {
+        <div style="display: flex; justify-content: center; align-items: stretch;">
+            <MudProgressCircular Color="Color.Secondary" Indeterminate="true" Size="Size.Small" />
+            <MudText style="margin-left: 10px; margin-bottom: 10px;">正在拉取文章列表...</MudText>
         </div>
-    </MudListItem>
-    <MudListItem Text="789">
-        <MudText>789</MudText>
-    </MudListItem>    
+    }
+    @foreach (var item in DisplayArticles)
+    {
+        <MudListItem Text="@item.Name">
+            <div style="display: flex;">
+                <MudIcon Icon="@Icons.Material.Filled.Article" Color="@(SelectedValues.Any(x => x == item.Name) ? Color.Primary : Color.Default)" Style="margin-right: 10px;" />
+                <MudText>@item.Name</MudText>
+                <MudSpacer />
+                @if (!item.Saved)
+                {
+                    <MudTooltip Text="未保存"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Warning" Size="Size.Small" Style="display: flex; flex-direction: column; justify-content: center;" /></MudTooltip>
+                }
+            </div>
+        </MudListItem>
+    }
 </MudList>
-<div style="margin-top: 16px; display: flex; position: sticky; bottom: 0; background-color: var(--mud-palette-drawer-background)">
-    <MudButton Variant="Variant.Text" Color="Color.Primary">全选</MudButton>
-    <MudButton Variant="Variant.Text" Color="Color.Secondary">反选</MudButton>
-    <MudSpacer />
-    <MudButton Variant="Variant.Text" Color="Color.Error">隐藏</MudButton>
-    <MudButton Variant="Variant.Text" Color="Color.Error">删除</MudButton>
-</div>
+@if (MultiSelect)
+{
+    <div style="margin-top: 16px; display: flex; position: sticky; bottom: 0; background-color: var(--mud-palette-drawer-background)">
+        <MudButton Variant="Variant.Text" Color="Color.Primary">全选</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Secondary">反选</MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" Color="Color.Error">隐藏</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Error">删除</MudButton>
+    </div>
+}
 
 @code {
-    public IReadOnlyCollection<string> SelectedValues = [];
+    public IReadOnlyCollection<string> SelectedValues { get; set; } = [];
+
+    public string CurrentArticle { get; set; } = "";
+
+    public string Search { get; set; } = "";
+
+    public List<Article> Articles { get; set; } = [];
+
+    public List<Article> DisplayArticles { get; set; } = [];
+
+    public bool MultiSelect { get; set; }
+
+    public bool Loading { get; set; }
+
+    public Debouncer Debouncer { get; set; } = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadArticleList();
+            StateHasChanged();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Common.OnArticleSaveStateChanged += OnArticleSaveStateChanged;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Common.OnArticleSaveStateChanged -= OnArticleSaveStateChanged;
+    }
+
+    public async Task LoadArticleList()
+    {
+        Loading = true;
+        List<Article> articles = [];
+        await Task.Delay(1000);
+        await Task.Run(() =>
+        {
+            foreach (var item in Directory.GetFiles(AppConfig.HexoArticlePath, "*.md"))
+            {
+                var article = new Article { Name = Path.GetFileNameWithoutExtension(item), FilePath = item };
+                articles.Add(article);
+                var a = Articles.FirstOrDefault(x => x.Name == article.Name);
+                if(a != null)
+                {
+                    article.Saved = a.Saved;
+                }
+            }
+            articles = articles.OrderBy(x => x.Name).ToList();
+            Articles = articles;
+        });
+        RefilterArticles();
+        Loading = false;
+    }
+
+    public void RefilterArticles()
+    {
+        DisplayArticles = Articles.Where(x => x.Name.ToLower().Contains(Search)).ToList();
+        InvokeAsync(() => StateHasChanged());
+    }
+
+    public void OnMultiSelectChanged(bool enabled)
+    {
+        MultiSelect = enabled;
+        SelectedValues = [CurrentArticle];
+        StateHasChanged();
+    }
+
+    public void OnSelectedArticlesChanged(IReadOnlyCollection<string> selectedList)
+    {
+        SelectedValues = selectedList;
+        StateHasChanged();
+    }
+
+    public void OnSelectedArticleChanged(string selected)
+    {
+        SelectedValues = [selected];
+        CurrentArticle = selected;
+        StateHasChanged();
+        Common.InvokeCurrentArticleChanged(Articles.FirstOrDefault(x => x.Name == selected));
+    }
+
+    public void OnSearchChanged(string search)
+    {
+        Search = search.ToLower();
+        RefilterArticles();
+    }
+
+    public void OnArticleSaveStateChanged(Article article, bool saveState)
+    {
+        article.Saved = saveState;
+        StateHasChanged();
+    }
 }
