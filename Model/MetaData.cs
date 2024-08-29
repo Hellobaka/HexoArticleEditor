@@ -104,17 +104,22 @@ namespace HexoArticleEditor.Model
                 return false;
             }
 
+            do
+            {
+                content = reader.ReadLine();
+            } while (string.IsNullOrWhiteSpace(content)) ;
+
             if (json)
             {
                 metaDataRaw = $"{{{metaDataRaw}}}";
                 metaData = ParseFromJson(metaDataRaw);
-                remain = reader.ReadToEnd();
+                remain = content + Environment.NewLine + reader.ReadToEnd();
                 return true;
             }
             else if (yamlStart)
             {
                 metaData = ParseFromYaml(metaDataRaw);
-                remain = reader.ReadToEnd();
+                remain = content + Environment.NewLine + reader.ReadToEnd();
                 return true;
             }
 
