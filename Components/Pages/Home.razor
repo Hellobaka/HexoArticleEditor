@@ -651,6 +651,8 @@
 
     private Article CurrentArticle { get; set; } = new();
 
+    private System.Timers.Timer AutoSaveTimer { get; set; }
+
     protected override void OnInitialized()
     {
         PageInstance = DotNetObjectReference.Create(this);
@@ -666,6 +668,12 @@
             Common.OnCurrentArticleChanged += OnCurrentArticleChanged;
             await JS.InvokeVoidAsync("initEditor", PageInstance);
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+
+            AutoSaveTimer = new();
+            AutoSaveTimer.Interval = TimeSpan.FromSeconds(AppConfig.AutoSaveIntervalMinutes).TotalMilliseconds;
+            AutoSaveTimer.Elapsed += AutoSaveTimer_Elapsed;
+            AutoSaveTimer.Enabled = true;
+            AutoSaveTimer.Start();
         }
     }
 
@@ -676,6 +684,13 @@
         Common.ArticleListClicked -= ArticleListDisplayChanged;
         Common.TerminalClicked -= TerminalDisplayChanged;
         Common.OnCurrentArticleChanged -= OnCurrentArticleChanged;
+
+        if (AutoSaveTimer != null && AutoSaveTimer.Enabled)
+        {
+            AutoSaveTimer.Enabled = false;
+            AutoSaveTimer.Stop();
+            AutoSaveTimer.Dispose();
+        }
     }
 
     public async void DarkThemeChanged(bool darkTheme)
@@ -736,9 +751,14 @@
     {
         try
         {
-            string content = await JS.InvokeAsync<string>("getModelValue");
-            string metaDataRaw = MetaDataEditorInstance.GetMetaData().ParseToRaw();
-            File.WriteAllText(CurrentArticle.FilePath, metaDataRaw + content);
+            File.WriteAllText(CurrentArticle.FilePath, await GetCurrentArticleValue());
+            if (AppConfig.DeleteAutoSaveAfterSave)
+            {
+                // 保存完成后删除所有自动保存点
+                string dir = Path.Combine(AppConfig.HexoArticlePath, "autosave", Path.GetFileNameWithoutExtension(CurrentArticle.FilePath));
+                Directory.Delete(dir, true);
+            }
+            // 通知文件列表更新文件保存状态
             Common.InvokeArticleSaveStateChanged(CurrentArticle, true);
             SnackBar.Add($"文章已保存", Severity.Success);
         }
@@ -820,6 +840,14 @@
         await ImageUploaded(e.File);
     }
 
+    private async Task<string> GetCurrentArticleValue()
+    {
+        string content = await JS.InvokeAsync<string>("getModelValue");
+        string metaDataRaw = MetaDataEditorInstance.GetMetaData().ParseToRaw();
+
+        return metaDataRaw + content;
+    }
+
     private async void ArticleListDisplayChanged()
     {
         ArticleListDisplay = !ArticleListDisplay;
@@ -856,5 +884,35 @@
         });
         Loading = false;
         await InvokeAsync(() => StateHasChanged());
- }
+    }
+
+    private async void AutoSaveTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        // 触发条件：文章处于未保存状态
+        if (CurrentArticle == null || CurrentArticle.Saved)
+        {
+            return;
+        }
+        string fileName = Path.GetFileName(CurrentArticle.FilePath);
+        string dir = Path.Combine(AppConfig.HexoArticlePath, "autosave", Path.GetFileNameWithoutExtension(fileName));
+        Directory.CreateDirectory(dir);
+
+        string content = await GetCurrentArticleValue();
+        fileName = $"{DateTime.Now:yyyyMMddHHmmss}.md";
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, fileName), content);
+            var fileList = Directory.GetFiles(dir, "*.md").OrderBy(x => x).ToArray();
+            if (fileList.Length > AppConfig.AutoSaveMaxCount
+                && File.Exists(fileList.FirstOrDefault()))
+            {
+                File.Delete (fileList.First());
+            }
+            await JS.InvokeVoidAsync("updateStatus", $"自动保存完成 {DateTime.Now:G}");
+        }
+        catch(Exception exc)
+        {
+            SnackBar.Add($"自动保存失败：{exc.Message}", Severity.Error);
+        }
+    }
 }
