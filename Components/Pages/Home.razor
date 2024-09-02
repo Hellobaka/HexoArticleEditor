@@ -88,7 +88,7 @@
 
 <MudDrawer Width="350px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
     <div class="pa-2">
-        <ArticlesList />
+        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" />
     </div>
 </MudDrawer>
 
@@ -345,9 +345,12 @@
     }
 
     // 设置编辑器当前Model
-    function setModelValue(modelName, value) {
-        if (modelList[modelName]){
+    function setModelValue(modelName, value, forced) {
+        if (modelList[modelName] && !forced){
             // modelList[modelName].setValue(value);
+            monacoEditor.setModel(modelList[modelName])
+        } else if(forced) {
+            modelList[modelName].setValue(value);
             monacoEditor.setModel(modelList[modelName])
         } else {
             const model = monaco.editor.createModel(value, 'markdown', monaco.Uri.parse(`file://${modelName}.md`))
@@ -670,7 +673,7 @@
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
 
             AutoSaveTimer = new();
-            AutoSaveTimer.Interval = TimeSpan.FromSeconds(AppConfig.AutoSaveIntervalMinutes).TotalMilliseconds;
+            AutoSaveTimer.Interval = TimeSpan.FromMinutes(AppConfig.AutoSaveIntervalMinutes).TotalMilliseconds;
             AutoSaveTimer.Elapsed += AutoSaveTimer_Elapsed;
             AutoSaveTimer.Enabled = true;
             AutoSaveTimer.Start();
@@ -705,9 +708,9 @@
         return str;
     }
 
-    public async Task SetModelValue(string modelName, string content)
+    public async Task SetModelValue(string modelName, string content, bool forced = false)
     {
-        await JS.InvokeVoidAsync("setModelValue", modelName, content);
+        await JS.InvokeVoidAsync("setModelValue", modelName, content, forced);
     }
 
     public async void PreviewShowAndRefresh()
@@ -914,5 +917,28 @@
         {
             SnackBar.Add($"自动保存失败：{exc.Message}", Severity.Error);
         }
+    }
+
+    private async void OnRevertAutoSave(AutoSaveItem autoSaveItem)
+    {
+        if (File.Exists(autoSaveItem.FilePath) is false)
+        {
+            SnackBar.Add("选择的自动保存节点文件不存在，无法加载", Severity.Error);
+            return;
+        }
+        Loading = true;
+        await Task.Run(async () =>
+        {
+            string content = File.ReadAllText(autoSaveItem.FilePath);
+            if (MetaData.ParseFromRaw(content, out MetaData? metaData, out string remain))
+            {
+                CurrentArticle.MetaData = metaData;
+                content = remain;
+            }
+            await SetModelValue(CurrentArticle.Name, content, true);
+        });
+        Loading = false;
+        Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
+        StateHasChanged();
     }
 }

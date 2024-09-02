@@ -1,5 +1,7 @@
 ﻿@using HexoArticleEditor.Model
 @implements IAsyncDisposable
+@inject IDialogService DialogService
+@inject ISnackbar SnackBar
 
 <div style="display: flex;">
     <MudButton Variant="Variant.Text" Color="Color.Primary">新建</MudButton>
@@ -30,10 +32,21 @@
                 <MudIcon Icon="@Icons.Material.Filled.Article" Color="@(SelectedValues.Any(x => x == item.Name) ? Color.Primary : Color.Default)" Style="margin-right: 10px;" />
                 <MudText>@item.Name</MudText>
                 <MudSpacer />
-                @if (!item.Saved)
-                {
-                    <MudTooltip Text="未保存"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Warning" Size="Size.Small" Style="display: flex; flex-direction: column; justify-content: center;" /></MudTooltip>
-                }
+                <div style="display: flex; flex-direction: row; justify-content: center; margin-left: 10px; align-items: baseline;">
+                    @if (!item.Saved)
+                    {
+                        <MudTooltip Text="未保存"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Warning" Size="Size.Small" /></MudTooltip>
+                    }
+                    @if (SelectedValues.Any(x => x == item.Name))
+                    {
+                        <MudTooltip Text="菜单">
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Color="Color.Default" Style="margin-left: 5px;">
+                                <MudMenuItem OnClick="@(() => RevertAutoSaveClicked(item))">回滚自动保存</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => DiscardEditContent(item))">放弃当前更改</MudMenuItem>
+                            </MudMenu>
+                        </MudTooltip>
+                    }
+                </div>
             </div>
         </MudListItem>
     }
@@ -50,6 +63,9 @@
 }
 
 @code {
+    [Parameter]
+    public EventCallback<AutoSaveItem> OnRevertAutoSave { get; set; }
+
     public IReadOnlyCollection<string> SelectedValues { get; set; } = [];
 
     public string CurrentArticle { get; set; } = "";
@@ -146,5 +162,25 @@
     {
         article.Saved = saveState;
         StateHasChanged();
+    }
+
+    private async Task RevertAutoSaveClicked(Article article)
+    {
+        var result = await DialogService.ShowAsync<RevertAutoSaveDialog>("请选择要回滚的自动保存时间点", parameters: new DialogParameters<RevertAutoSaveDialog>
+        {
+            { x => x.CurrentArticle, article }
+        }, new DialogOptions
+        { 
+            FullWidth = true 
+        });
+        if ((await result.Result)?.Data is AutoSaveItem autoSaveItem)
+        {
+            await OnRevertAutoSave.InvokeAsync(autoSaveItem);
+        }
+    }
+
+    private void DiscardEditContent(Article article)
+    {
+        
     }
 }

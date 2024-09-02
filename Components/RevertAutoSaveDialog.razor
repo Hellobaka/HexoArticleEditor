@@ -1,0 +1,100 @@
+﻿@using HexoArticleEditor.Model
+<MudDialog>
+    <DialogContent>
+        @if (AutoSaveList.Count == 0 && !ErrorExist)
+        {
+            <div style="display: flex; justify-content: center; align-items: stretch;">
+                <MudProgressCircular Color="Color.Secondary" Indeterminate="true" Size="Size.Small" />
+                <MudText style="margin-left: 10px; margin-bottom: 10px;">正在拉取自动保存节点...</MudText>
+            </div>
+        }
+        else if (ErrorExist)
+        {
+            <MudAlert Class="mt-4" Severity="Severity.Warning">
+                @ErrorText
+            </MudAlert>
+        }
+        else
+        {
+            <MudRadioGroup @bind-Value="SelectedOption" T="AutoSaveItem">
+                @foreach (var item in AutoSaveList)
+                {
+                    <MudRadio Value="item" Color="Color.Primary">@item.DisplayName</MudRadio>
+                }
+            </MudRadioGroup>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Secondary" OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(ErrorExist || SelectedOption == null)">确定</MudButton>
+    </DialogActions>
+</MudDialog>
+<style>
+    .mud-radio-group {
+        display: contents;
+    }
+</style>
+@code {
+    [Parameter]
+    public Article CurrentArticle { get; set; }
+
+    [CascadingParameter]
+    private MudDialogInstance MudDialog { get; set; }
+
+    private List<AutoSaveItem> AutoSaveList { get; set; } = [];
+
+    private AutoSaveItem SelectedOption { get; set; } = null;
+
+    private bool ErrorExist { get; set; }
+
+    private string ErrorText { get; set; } = "无法遍历自动保存节点";
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(SelectedOption));
+
+    private void Cancel() => MudDialog.Cancel();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && CurrentArticle != null && File.Exists(CurrentArticle.FilePath))
+        {
+            await Task.Run(() =>
+            {
+                string autoSaveDir = Path.Combine(AppConfig.HexoArticlePath, "autosave", CurrentArticle.Name);
+                if (!Directory.Exists(autoSaveDir))
+                {
+                    ErrorExist = true;
+                    ErrorText = "此文章可能没有自动保存节点，自动保存目录不存在";
+                    return;
+                }
+                try
+                {
+                    foreach (var item in Directory.GetFiles(autoSaveDir))
+                    {
+                        var autosave = new AutoSaveItem()
+                        {
+                            ParentArticleName = CurrentArticle.Name,
+                            FilePath = item
+                        };
+                        if (DateTime.TryParseExact(autosave.FileName, "yyyyMMddHHmmss", null, System.Globalization.DateTimeStyles.None, out DateTime time))
+                        {
+                            autosave.DisplayName = time.ToString("G");
+                            AutoSaveList.Add(autosave);
+                        }
+                    }
+
+                    if(AutoSaveList.Count == 0)
+                    {
+                        ErrorExist = true;
+                        ErrorText = "列表为空";
+                    }
+                }
+                catch (Exception e)
+                {
+                    ErrorExist = true;
+                    ErrorText = $"遍历自动保存节点目录时发生异常：{e.Message}";
+                }
+            });
+            StateHasChanged();
+        }
+    }
+}
