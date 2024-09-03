@@ -20,6 +20,8 @@
 
         public static bool DeleteAutoSaveAfterSave { get; set; }
 
+        public static List<string> HexoTerminalCommands { get; set; } = ["hexo generate", "hexo clean"];
+
         public static bool Load()
         {
             try
@@ -33,6 +35,7 @@
                 DeleteAutoSaveAfterSave = ConfigHelper.GetConfig("DeleteAutoSaveAfterSave", false);
                 AutoSaveIntervalMinutes = ConfigHelper.GetConfig("AutoSaveIntervalMinutes", 3);
                 AutoSaveMaxCount = ConfigHelper.GetConfig("AutoSaveMaxCount", 10);
+                HexoTerminalCommands = ConfigHelper.GetConfig("HexoTerminalCommands", new List<string>() { "hexo generate", "hexo clean" });
             }
             catch
             {

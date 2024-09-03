@@ -1,25 +1,283 @@
 ﻿@using HexoArticleEditor.Model
+@using System.Diagnostics
+@inject ISnackbar SnackBar
+@inject IScrollManager ScrollManager
 
-<div style="display: flex; align-items: baseline;" id="terminalContainer">
-    <MudSpacer/>
-    <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.Close" OnClick="@(() => Common.InvokeTerminalClicked())"></MudIconButton>
+<div style="display: flex; align-items: baseline;">
+    <MudSpacer />
+    <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.Close" OnClick="OnTerminalClose"></MudIconButton>
 </div>
-<MudTextField T="string" Label="输出" Variant="Variant.Outlined" Text="@TerminalOutput" Lines="5" MaxLines="10" AutoGrow />
-<div style="display: flex; align-items: baseline;" id="terminalContainer">
-    <MudSelect T="string" Label="命令" Variant="Variant.Filled" AnchorOrigin="Origin.BottomCenter" Margin="Margin.Dense">
-        @foreach(var item in Commands)
+
+<MudPaper Style="padding: 16px; margin-bottom: 10px; max-height: 160px; overflow: auto; height: 160px;" id="terminalOutputContainer">
+    <pre style="font-family: var(--mud-typography-default-family);">
+        @foreach (var output in TerminalOutput)
         {
-            <MudSelectItem T="string" Value="@item"/>
+            @output
+            <br />
+        }
+    </pre>
+</MudPaper>
+<div style="display: flex; align-items: baseline; margin-bottom: 16px;">
+    <MudSelect T="string" @bind-Value="SelectedCommand" Label="命令" Variant="Variant.Filled" AnchorOrigin="Origin.TopCenter" Margin="Margin.Dense">
+        @foreach (var item in Commands)
+        {
+            <MudSelectItem T="string" Value="@item" />
         }
     </MudSelect>
-    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success"></MudIconButton>
-    <MudIconButton Icon="@Icons.Material.Filled.Stop" Color="Color.Secondary"></MudIconButton>
+    <MudSelect T="string" @bind-Value="SelectedEncoding" Label="编码" Variant="Variant.Filled" AnchorOrigin="Origin.TopCenter" Margin="Margin.Dense">
+        @foreach (var item in Encodings)
+        {
+            <MudSelectItem T="string" Value="@item" />
+        }
+    </MudSelect>
+    @if (CommandExecuting)
+    {
+        <MudIconButton Disabled>
+            <MudProgressCircular Indeterminate Size="Size.Small" Color="Color.Primary" />
+        </MudIconButton>
+    }
+    else
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" OnClick="OnCommandStart"></MudIconButton>
+    }
+    <MudIconButton Icon="@Icons.Material.Filled.Stop" Color="Color.Secondary" OnClick="OnCommandStop" Disabled="!CommandExecuting"></MudIconButton>
 </div>
-<MudScrollToTop Selector="#terminalContainer" Style="z-index:2001;">
-    <MudFab Style="position: fixed; right: 10px; bottom: 20px;" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowCircleUp" />
-</MudScrollToTop>
 @code {
-    private List<string> Commands { get; set; } = ["hexo generate", "hexo clean"];
+    [Parameter]
+    public EventCallback OnTerminalClose { get; set; }
 
-    private string TerminalOutput { get; set; } = "";
+    private List<string> Commands { get; set; } = [];
+
+    private List<string> Encodings { get; set; } = ["UTF-8", "Default"];
+
+    private string SelectedCommand { get; set; } = "";
+
+    private List<MarkupString> TerminalOutput { get; set; } = [];
+
+    private Process? CommandProcess { get; set; } = null;
+
+    private bool CommandExecuting { get; set; } = false;
+
+    private string SelectedEncoding { get; set; } = "UTF-8";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Run(() =>
+        {
+            Commands = AppConfig.HexoTerminalCommands;
+        });
+    }
+
+    private async Task OnCommandStart()
+    {
+        if (string.IsNullOrEmpty(SelectedCommand))
+        {
+            SnackBar.Add("指令为空", Severity.Error);
+            return;
+        }
+        TerminalOutput = [];
+        StateHasChanged();
+        CommandExecuting = true;
+
+        await Task.Run(async () =>
+        {
+            var processInfo = new ProcessStartInfo
+            {
+                FileName = GetShell(),
+                Arguments = GetShellArguments(SelectedCommand),
+                WorkingDirectory = AppConfig.HexoBasePath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = false,
+                StandardOutputEncoding = SelectedEncoding == "UTF-8" ? System.Text.Encoding.UTF8 : null,
+                    StandardErrorEncoding = SelectedEncoding == "UTF-8" ? System.Text.Encoding.UTF8 : null,
+            };
+
+            CommandProcess = new Process
+            {
+                StartInfo = processInfo,
+                EnableRaisingEvents = true
+            };
+
+            CommandProcess.OutputDataReceived += async (sender, args) =>
+            {
+                if (args.Data is null)
+                {
+                    return;
+                }
+                await InvokeAsync(() => TerminalOutput.Add(new MarkupString(ParseAnsiText(args.Data))));
+                await InvokeAsync(() => StateHasChanged());
+                InvokeAsync(() => ScrollManager.ScrollToBottomAsync("#terminalOutputContainer", ScrollBehavior.Auto));
+            };
+            CommandProcess.ErrorDataReceived += async (sender, args) =>
+            {
+                if (args.Data is null)
+                {
+                    return;
+                }
+                await InvokeAsync(() => TerminalOutput.Add(new MarkupString(ParseAnsiText(args.Data))));
+                await InvokeAsync(() => StateHasChanged());
+                InvokeAsync(() => ScrollManager.ScrollToBottomAsync("#terminalOutputContainer", ScrollBehavior.Auto));
+            };
+
+            CommandProcess.Start();
+            CommandProcess.BeginOutputReadLine();
+            CommandProcess.BeginErrorReadLine();
+
+            await CommandProcess.WaitForExitAsync();
+            await InvokeAsync(() => TerminalOutput.Add(new MarkupString($"\n进程已退出，返回值为 {CommandProcess.ExitCode}。")));
+            await InvokeAsync(() => ScrollManager.ScrollToBottomAsync("#terminalOutputContainer", ScrollBehavior.Auto));
+        });
+        CommandExecuting = false;
+    }
+
+    private async void OnCommandStop()
+    {
+        if (CommandProcess == null || !CommandExecuting)
+        {
+            return;
+        }
+        await Task.Run(() => 
+        { 
+            CommandProcess.Kill(true);
+        });
+    }
+
+    private string GetShell()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "cmd.exe";
+        }
+        else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return "/bin/bash";
+        }
+        throw new PlatformNotSupportedException("Unsupported platform");
+    }
+
+    private string GetShellArguments(string command)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return $"/c {command}";
+        }
+        else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return $"-c \"{command}\"";
+        }
+        throw new PlatformNotSupportedException("Unsupported platform");
+    }
+
+    private string ParseAnsiText(string text)
+    {
+        bool isAnsi = false;
+        bool isSpanClosed = true;
+        string ansiControlText = "";
+        string style = "";
+        string markupString = "";
+        for (int i = 0; i < text.Length; i++)
+        {
+            var item = text[i];
+            if (item == 0x1B && i != text.Length - 1 && text[i + 1] == '[')
+            {
+                isAnsi = true;
+                if (!isSpanClosed)
+                {
+                    markupString += "</span>";
+                    isSpanClosed = true;
+                }
+                i++;
+                continue;
+            }
+            if (isAnsi && item != 'm')
+            {
+                ansiControlText += item;
+                continue;
+            }
+
+            if (isAnsi && item == 'm')
+            {
+                isAnsi = false;
+                isSpanClosed = false;
+                foreach (var ansi in ansiControlText.Split(';'))
+                {
+                    switch (ansi)
+                    {
+                        case "30":
+                            style += "color: rgb(0, 0, 0);";
+                            break;
+                        case "31":
+                            style += "color: rgb(194, 54, 33);";
+                            break;
+                        case "32":
+                            style += "color: rgb(37, 188, 36);";
+                            break;
+                        case "33":
+                            style += "color: rgb(173, 173, 39);";
+                            break;
+                        case "34":
+                            style += "color: rgb(73, 46, 255);";
+                            break;
+                        case "35":
+                            style += "color: rgb(211, 56, 211);";
+                            break;
+                        case "36":
+                            style += "color: rgb(51, 187, 200);";
+                            break;
+                        case "37":
+                            style += "color: rgb(203, 204, 205);";
+                            break;
+                        case "39":
+                            style += "color: default;";
+                            break;
+
+                        case "90":
+                            style += "color: rgb(129, 131, 131);";
+                            break;
+                        case "91":
+                            style += "color: rgb(252, 57, 31);";
+                            break;
+                        case "92":
+                            style += "color: rgb(49, 231, 34);";
+                            break;
+                        case "93":
+                            style += "color: rgb(234, 236, 35);";
+                            break;
+                        case "94":
+                            style += "color: rgb(88, 51, 255);";
+                            break;
+                        case "95":
+                            style += "color: rgb(249, 53, 248);";
+                            break;
+                        case "96":
+                            style += "color: rgb(20, 240, 240);";
+                            break;
+                        case "97":
+                            style += "color: rgb(233, 235, 255);";
+                            break;
+                    }
+                }
+
+                markupString += $"<span style=\"{style}\">";
+                style = "";
+                continue;
+            }
+            if (!isAnsi)
+            {
+                markupString += item;
+            }
+        }
+        if (!isSpanClosed && !markupString.Contains("<span"))
+        {
+            markupString = $"<span>{markupString}</span>";
+        }
+        else if (!isSpanClosed)
+        {
+            markupString = $"{markupString}</span>";
+        }
+
+        return markupString;
+    }
 }
