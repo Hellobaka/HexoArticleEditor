@@ -10,8 +10,6 @@
 
         public static event Action<Article>? OnCurrentArticleChanged;
 
-        public static event Action<Article, bool>? OnArticleSaveStateChanged;
-
         public static void InvokeDarkModeChanged(bool darkMode)
         {
             DarkThemeChanged?.Invoke(darkMode);
@@ -32,14 +30,6 @@
             if (article != null) 
             {
                 OnCurrentArticleChanged?.Invoke(article);
-            }
-        }
-
-        public static void InvokeArticleSaveStateChanged(Article? article, bool saveState)
-        {
-            if (article != null) 
-            {
-                OnArticleSaveStateChanged?.Invoke(article, saveState);
             }
         }
 

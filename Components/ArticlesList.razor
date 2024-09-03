@@ -1,5 +1,4 @@
 ﻿@using HexoArticleEditor.Model
-@implements IAsyncDisposable
 @inject IDialogService DialogService
 @inject ISnackbar SnackBar
 
@@ -10,7 +9,7 @@
     <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.Close" OnClick="@(() => Common.InvokeArticleListClicked())"></MudIconButton>
 </div>
 <MudTextField T="string" Label="搜点什么？" Text="@Search" TextChanged="OnSearchChanged" Variant="Variant.Outlined" Clearable Margin="Margin.Dense"></MudTextField>
-<MudList T="string" SelectedValues="SelectedValues" SelectedValue="CurrentArticle" Dense="true" SelectionMode="@(MultiSelect ? SelectionMode.MultiSelection: SelectionMode.SingleSelection)" CheckBoxColor="Color.Primary" SelectedValueChanged="OnSelectedArticleChanged" SelectedValuesChanged="OnSelectedArticlesChanged">
+<MudList Disabled="Loading" T="Article" SelectedValues="SelectedValues" SelectedValue="CurrentArticle" Dense="true" SelectionMode="@(MultiSelect ? SelectionMode.MultiSelection: SelectionMode.SingleSelection)" CheckBoxColor="Color.Primary" SelectedValueChanged="OnSelectedArticleChanged" SelectedValuesChanged="OnSelectedArticlesChanged">
     <MudListSubheader>
         <div style="display: flex; align-items: center;">
             <MudSwitch T="bool" Value="MultiSelect" Color="Color.Primary" ValueChanged="OnMultiSelectChanged">多选</MudSwitch>
@@ -27,9 +26,9 @@
     }
     @foreach (var item in DisplayArticles)
     {
-        <MudListItem Text="@item.Name">
+        <MudListItem Value="item">
             <div style="display: flex;">
-                <MudIcon Icon="@Icons.Material.Filled.Article" Color="@(SelectedValues.Any(x => x == item.Name) ? Color.Primary : Color.Default)" Style="margin-right: 10px;" />
+                <MudIcon Icon="@Icons.Material.Filled.Article" Color="@(SelectedValues.Contains(item) ? Color.Primary : Color.Default)" Style="margin-right: 10px;" />
                 <MudText>@item.Name</MudText>
                 <MudSpacer />
                 <div style="display: flex; flex-direction: row; justify-content: center; margin-left: 10px; align-items: baseline;">
@@ -37,7 +36,7 @@
                     {
                         <MudTooltip Text="未保存"><MudIcon Icon="@Icons.Material.Filled.Circle" Color="Color.Warning" Size="Size.Small" /></MudTooltip>
                     }
-                    @if (SelectedValues.Any(x => x == item.Name))
+                    @if (SelectedValues.Contains(item) && !MultiSelect)
                     {
                         <MudTooltip Text="菜单">
                             <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Color="Color.Default" Style="margin-left: 5px;">
@@ -53,12 +52,12 @@
 </MudList>
 @if (MultiSelect)
 {
-    <div style="margin-top: 16px; display: flex; position: sticky; bottom: 0; background-color: var(--mud-palette-drawer-background)">
-        <MudButton Variant="Variant.Text" Color="Color.Primary">全选</MudButton>
-        <MudButton Variant="Variant.Text" Color="Color.Secondary">反选</MudButton>
+    <div style="margin-top: 16px; display: flex; position: sticky; bottom: 0; background-color: var(--mud-palette-drawer-background); z-index: 999;">
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="SelectAllArticles">全选</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="InvertSelectArticles">反选</MudButton>
         <MudSpacer />
-        <MudButton Variant="Variant.Text" Color="Color.Error">隐藏</MudButton>
-        <MudButton Variant="Variant.Text" Color="Color.Error">删除</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Tertiary" OnClick="HideArticles">隐藏</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteArticles">删除</MudButton>
     </div>
 }
 
@@ -69,9 +68,15 @@
     [Parameter]
     public EventCallback<Article> OnDiscardEditContent { get; set; }
 
-    public IReadOnlyCollection<string> SelectedValues { get; set; } = [];
+    [Parameter]
+    public EventCallback<List<Article>> OnHideArticles { get; set; }
 
-    public string CurrentArticle { get; set; } = "";
+    [Parameter]
+    public EventCallback<List<Article>> OnDeleteArticles { get; set; }
+
+    public List<Article> SelectedValues { get; set; } = [];
+
+    public Article CurrentArticle { get; set; } = new();
 
     public string Search { get; set; } = "";
 
@@ -94,16 +99,6 @@
         }
     }
 
-    protected override void OnInitialized()
-    {
-        Common.OnArticleSaveStateChanged += OnArticleSaveStateChanged;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Common.OnArticleSaveStateChanged -= OnArticleSaveStateChanged;
-    }
-
     public async Task LoadArticleList()
     {
         Loading = true;
@@ -116,7 +111,7 @@
                 var article = new Article { Name = Path.GetFileNameWithoutExtension(item), FilePath = item };
                 articles.Add(article);
                 var a = Articles.FirstOrDefault(x => x.Name == article.Name);
-                if(a != null)
+                if(a != null && !string.IsNullOrEmpty(article.Name))
                 {
                     article.Saved = a.Saved;
                 }
@@ -126,6 +121,7 @@
         });
         RefilterArticles();
         Loading = false;
+        StateHasChanged();
     }
 
     public void RefilterArticles()
@@ -141,18 +137,18 @@
         StateHasChanged();
     }
 
-    public void OnSelectedArticlesChanged(IReadOnlyCollection<string> selectedList)
+    public void OnSelectedArticlesChanged(IReadOnlyCollection<Article> selectedList)
     {
-        SelectedValues = selectedList;
+        SelectedValues = selectedList.Where(x => !string.IsNullOrEmpty(x.Name)).ToList();
         StateHasChanged();
     }
 
-    public void OnSelectedArticleChanged(string selected)
+    public void OnSelectedArticleChanged(Article selected)
     {
         SelectedValues = [selected];
         CurrentArticle = selected;
         StateHasChanged();
-        Common.InvokeCurrentArticleChanged(Articles.FirstOrDefault(x => x.Name == selected));
+        Common.InvokeCurrentArticleChanged(selected);
     }
 
     public void OnSearchChanged(string search)
@@ -194,9 +190,76 @@
         {
             FullWidth = true
         });
-        if ((bool)result)
+        if (result.GetValueOrDefault(false))
         {
             await OnDiscardEditContent.InvokeAsync(article);
         }
+    }
+
+    private void SelectAllArticles()
+    {
+        if ((SelectedValues.Count == Articles.Count)
+            || (DisplayArticles.Count != Articles.Count && SelectedValues.Count == DisplayArticles.Count))
+        {
+            SelectedValues = [];
+        }
+        else
+        {
+            SelectedValues = DisplayArticles.ToList();
+        }
+        StateHasChanged();
+    }
+
+    private void InvertSelectArticles()
+    {
+        SelectedValues = DisplayArticles.Where(x => !SelectedValues.Contains(x)).ToList();
+        StateHasChanged();
+    }
+
+    private async void HideArticles()
+    {
+        var result = await DialogService.ShowMessageBox(new MessageBoxOptions
+        {
+            Title = "隐藏文章",
+            Message = $"共选中了 {SelectedValues.Count} 篇文章，确定要隐藏吗？点击确定后文件被移动至hide文件夹中，取回需要手动操作",
+            YesText = "确定",
+            CancelText = "取消"
+        }, new DialogOptions
+        {
+            FullWidth = true
+        });
+        if (result.GetValueOrDefault(false))
+        {
+            await OnHideArticles.InvokeAsync(SelectedValues);
+        }
+        if (SelectedValues.Contains(CurrentArticle))
+        {
+            CurrentArticle = new();
+        }
+        SelectedValues = [];
+    }
+
+    private async void DeleteArticles()
+    {
+        var result = await DialogService.ShowMessageBox(new MessageBoxOptions
+        {
+            Title = "删除文章",
+            Message = $"共选中了 {SelectedValues.Count} 篇文章，确定要删除吗？点击确定后文件将会从硬盘中删除",
+            YesText = "确定",
+            CancelText = "取消"
+        }, new DialogOptions
+        {
+            FullWidth = true
+        });
+        if (result.GetValueOrDefault(false))
+        {
+            await OnDeleteArticles.InvokeAsync(SelectedValues);
+            MultiSelect = false;
+        }
+        if (SelectedValues.Contains(CurrentArticle))
+        {
+            CurrentArticle = new();
+        }
+        SelectedValues = [];
     }
 }

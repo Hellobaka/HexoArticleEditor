@@ -88,7 +88,7 @@
 
 <MudDrawer Width="350px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
     <div class="pa-2">
-        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" />
+        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" OnHideArticles="OnHideArticles" OnDeleteArticles="OnDeleteArticles" @ref="ArticlesList" />
     </div>
 </MudDrawer>
 
@@ -132,10 +132,11 @@
         homePage = blazorPageInstance
 
         require(['vs/editor/editor.main'], function () {
-            var uri = monaco.Uri.parse('file://default.js');
+            var uri = monaco.Uri.parse('file://default.md');
             var model = monaco.editor.getModel(uri);
             if (!model)
                 model = monaco.editor.createModel('Hello world!', 'markdown', uri);
+            modelList['default'] = model
 
             monacoEditor = monaco.editor.create(document.getElementById('monaco_editor'), {
                 model: model,
@@ -654,6 +655,8 @@
 
     private Article CurrentArticle { get; set; } = new();
 
+    private ArticlesList ArticlesList { get; set; } = new();
+
     private System.Timers.Timer AutoSaveTimer { get; set; }
 
     protected override void OnInitialized()
@@ -749,7 +752,7 @@
     {
         if (!Loading)
         {
-            Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
+            ArticlesList.OnArticleSaveStateChanged(CurrentArticle, false);
         }
     }
 
@@ -766,7 +769,7 @@
                 Directory.Delete(dir, true);
             }
             // 通知文件列表更新文件保存状态
-            Common.InvokeArticleSaveStateChanged(CurrentArticle, true);
+            ArticlesList.OnArticleSaveStateChanged(CurrentArticle, true);
             SnackBar.Add($"文章已保存", Severity.Success);
         }
         catch(Exception e)
@@ -942,7 +945,7 @@
             await SetModelValue(CurrentArticle.Name, content, true);
         });
         Loading = false;
-        Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
+        ArticlesList.OnArticleSaveStateChanged(CurrentArticle, false);
         StateHasChanged();
     }
 
@@ -969,9 +972,81 @@
             }
             await SetModelValue(CurrentArticle.Name, content, true);
         });
-        Common.InvokeArticleSaveStateChanged(CurrentArticle, true);
+        ArticlesList.OnArticleSaveStateChanged(CurrentArticle, true);
         Loading = false;
         StateHasChanged();
         SnackBar.Add("重新加载内容成功", Severity.Success);
+    }
+
+    private async void OnDeleteArticles(List<Article> articles)
+    {
+        int deleteCount = 0;
+        await Task.Run(() =>
+        {
+            foreach(var item in articles)
+            {
+                if (File.Exists(item.FilePath))
+                {
+                    try
+                    {
+                        File.Delete(item.FilePath);
+                        deleteCount++;
+                    }
+                    catch (Exception e)
+                    {
+                        SnackBar.Add($"文章: {item.Name} 无法删除，由于: {e.Message}", Severity.Error);
+                    }
+                }
+                else
+                {
+                    SnackBar.Add($"文章: {item.Name} 无法删除，由于: 文件不存在", Severity.Error);
+                }
+            }
+        });
+        SnackBar.Add($"{deleteCount} 篇文章已被删除", Severity.Success);
+        await ArticlesList.LoadArticleList();
+        if (articles.Contains(CurrentArticle))
+        {
+            CurrentArticle = new();
+            await SetModelValue("default", "");
+        }
+        StateHasChanged();
+    }
+
+    private async void OnHideArticles(List<Article> articles)
+    {
+        int hideCount = 0;
+        string hideDir = Path.Combine(AppConfig.HexoArticlePath, "hide");
+        Directory.CreateDirectory(hideDir);
+        await Task.Run(() =>
+        {
+            foreach (var item in articles)
+            {
+                if (File.Exists(item.FilePath))
+                {
+                    try
+                    {
+                        File.Move(item.FilePath, Path.Combine(hideDir, Path.GetFileName(item.FilePath)));
+                        hideCount++;
+                    }
+                    catch (Exception e)
+                    {
+                        SnackBar.Add($"文章: {item.Name} 无法移动，由于: {e.Message}", Severity.Error);
+                    }
+                }
+                else
+                {
+                    SnackBar.Add($"文章: {item.Name} 无法移动，由于: 文件不存在", Severity.Error);
+                }
+            }
+        });
+        SnackBar.Add($"{hideCount} 篇文章已被移动", Severity.Success);
+        await ArticlesList.LoadArticleList();
+        if (articles.Contains(CurrentArticle))
+        {
+            CurrentArticle = new();
+            await SetModelValue("default", "");
+        }
+        StateHasChanged();
     }
 }

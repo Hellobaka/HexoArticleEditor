@@ -9,7 +9,7 @@
 </div>
 
 <MudPaper Style="padding: 16px; margin-bottom: 10px; max-height: 160px; overflow: auto; height: 160px;" id="terminalOutputContainer">
-    <pre style="font-family: var(--mud-typography-default-family);">
+    <pre style="font-family: Consolas, var(--mud-typography-default-family);">
         @foreach (var output in TerminalOutput)
         {
             @output
@@ -91,7 +91,7 @@
                 UseShellExecute = false,
                 CreateNoWindow = false,
                 StandardOutputEncoding = SelectedEncoding == "UTF-8" ? System.Text.Encoding.UTF8 : null,
-                    StandardErrorEncoding = SelectedEncoding == "UTF-8" ? System.Text.Encoding.UTF8 : null,
+                StandardErrorEncoding = SelectedEncoding == "UTF-8" ? System.Text.Encoding.UTF8 : null,
             };
 
             CommandProcess = new Process
