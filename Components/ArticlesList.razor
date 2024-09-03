@@ -66,6 +66,9 @@
     [Parameter]
     public EventCallback<AutoSaveItem> OnRevertAutoSave { get; set; }
 
+    [Parameter]
+    public EventCallback<Article> OnDiscardEditContent { get; set; }
+
     public IReadOnlyCollection<string> SelectedValues { get; set; } = [];
 
     public string CurrentArticle { get; set; } = "";
@@ -179,8 +182,21 @@
         }
     }
 
-    private void DiscardEditContent(Article article)
+    private async Task DiscardEditContent(Article article)
     {
-        
+        var result = await DialogService.ShowMessageBox(new MessageBoxOptions
+        {
+            Title = "抛弃当前编辑内容",
+            Message = "确定要这么做吗？点击确定后将会重新读取原始文件",
+            YesText = "确定",
+            CancelText = "取消"
+        }, new DialogOptions
+        {
+            FullWidth = true
+        });
+        if ((bool)result)
+        {
+            await OnDiscardEditContent.InvokeAsync(article);
+        }
     }
 }
