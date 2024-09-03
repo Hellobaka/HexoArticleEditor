@@ -106,6 +106,7 @@
                 {
                     return;
                 }
+                // TODO: 可能引起性能问题
                 await InvokeAsync(() => TerminalOutput.Add(new MarkupString(ParseAnsiText(args.Data))));
                 await InvokeAsync(() => StateHasChanged());
                 InvokeAsync(() => ScrollManager.ScrollToBottomAsync("#terminalOutputContainer", ScrollBehavior.Auto));
