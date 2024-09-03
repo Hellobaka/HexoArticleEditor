@@ -16,11 +16,11 @@
 <InputFile OnChange="@OnNativeUpload" @ref="inputFile" id="nativeUpload" style="display: none" />
 <MudGrid>
     <MudItem sm="12" md="6">
-        <div id="editorContainer" style="position: relative; overflow: auto; min-width: 580px; min-height: 300px; border-radius: 5px; transition: height 0.5s;" class="long-editor">
+        <div id="editorContainer" style="position: relative; overflow: auto; min-width: 280px; min-height: 300px; border-radius: 5px; transition: height 0.5s;" class="long-editor">
             <MudPaper Elevation="20">
                 <MetaDataEditor MetaData="@CurrentArticle.MetaData" @ref="MetaDataEditorInstance" OnMetaDataSaved="NoticeMonacoEditorSaved" />
 
-                <MudToolBar id="editToolBar">
+                <MudToolBar id="editToolBar" Style="overflow-x: scroll; max-width: calc(100vw - 16px);">
                     <MudTooltip Text="一级标题"><MudIconButton OnClick="@((e) => ToolAction("h1"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH1" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="二级标题"><MudIconButton OnClick="@((e) => ToolAction("h2"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatH2" Color="Color.Inherit" /></MudTooltip>
                     <MudTooltip Text="粗体"><MudIconButton OnClick="@((e) => ToolAction("bold"))" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.FormatBold" Color="Color.Inherit" /></MudTooltip>
@@ -39,7 +39,7 @@
                             <MudIconButton Color="Color.Inherit" Icon="@Icons.Material.Filled.CloudUpload" />
                         </ActivatorContent>
                     </MudFileUpload>
-                    @if (!ShowPreview)
+                    @if (!ShowStaticPreview)
                     {
                         <MudSpacer />
                         <MudTooltip Text="预览"><MudIconButton OnClick="PreviewShowAndRefresh" Icon="@MudBlazor.FontIcons.MaterialSymbols.Rounded.Preview" Color="Color.Secondary" /></MudTooltip>
@@ -78,7 +78,7 @@
             </MudPaper>
         </div>
     </MudItem>
-    @if (ShowPreview)
+    @if (ShowStaticPreview)
     {
         <MudItem sm="12" md="6">
             <MarkdownPreview @ref="Preview" />
@@ -88,11 +88,11 @@
 
 <MudDrawer Width="350px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
     <div class="pa-2">
-        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" />
+        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" />
     </div>
 </MudDrawer>
 
-<MudDrawer Width="80%" @bind-Open="@PreviewDrawerOpen" Anchor="@Anchor.Right" Elevation="10" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
+<MudDrawer Width="80%" @bind-Open="@ShowDrawerPreview" Anchor="@Anchor.Right" Elevation="10" Variant="@DrawerVariant.Temporary" OverlayAutoClose="true">
     <MarkdownPreview @ref="Preview" />
 </MudDrawer>
 
@@ -628,7 +628,9 @@
             NotifyOnBreakpointOnly = true
         };
 
-    public bool ShowPreview { get; set; } = true;
+    public bool ShowStaticPreview { get; set; } = true;
+
+    private bool ShowDrawerPreview { get; set; }
 
     public bool Loading { get; set; }
 
@@ -645,8 +647,6 @@
     private MarkdownPreview Preview { get; set; }
 
     private MetaDataEditor MetaDataEditorInstance { get; set; }
-
-    private bool PreviewDrawerOpen { get; set; }
 
     private DotNetObjectReference<Home>? PageInstance { get; set; }
 
@@ -715,19 +715,20 @@
 
     public async void PreviewShowAndRefresh()
     {
-        if (!ShowPreview)
+        if (!ShowStaticPreview)
         {
-            PreviewDrawerOpen = true;
+            ShowDrawerPreview = true;
         }
         await Preview.ReloadFrame();
     }
 
     Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs e)
     {
-        ShowPreview = e.Breakpoint switch
+        ShowStaticPreview = e.Breakpoint switch
         {
             Breakpoint.Lg => true,
             Breakpoint.Xl => true,
+            Breakpoint.Md => true,
             _ => false
         };
         PreviewShowAndRefresh();
@@ -746,7 +747,10 @@
     [JSInvokable]
     public void NoticeMonacoEditorTextChanged()
     {
-        Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
+        if (!Loading)
+        {
+            Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
+        }
     }
 
     [JSInvokable]
@@ -940,5 +944,34 @@
         Loading = false;
         Common.InvokeArticleSaveStateChanged(CurrentArticle, false);
         StateHasChanged();
+    }
+
+    private async void OnDiscardEditContent(Article article)
+    {
+        if (CurrentArticle != article)
+        {
+            SnackBar.Add("选择的文章与当前文章不一致，请重新选择", Severity.Warning);
+            return;
+        }
+        if (CurrentArticle.Saved)
+        {
+            SnackBar.Add("当前文章没有要抛弃的内容", Severity.Warning);
+            return;
+        }
+        Loading = true;
+        await Task.Run(async () =>
+        {
+            string content = File.ReadAllText(article.FilePath);
+            if (MetaData.ParseFromRaw(content, out MetaData? metaData, out string remain))
+            {
+                CurrentArticle.MetaData = metaData;
+                content = remain;
+            }
+            await SetModelValue(CurrentArticle.Name, content, true);
+        });
+        Common.InvokeArticleSaveStateChanged(CurrentArticle, true);
+        Loading = false;
+        StateHasChanged();
+        SnackBar.Add("重新加载内容成功", Severity.Success);
     }
 }
