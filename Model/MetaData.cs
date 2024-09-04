@@ -107,7 +107,7 @@ namespace HexoArticleEditor.Model
             do
             {
                 content = reader.ReadLine();
-            } while (string.IsNullOrWhiteSpace(content)) ;
+            } while (string.IsNullOrWhiteSpace(content) && content != null) ;
 
             if (json)
             {

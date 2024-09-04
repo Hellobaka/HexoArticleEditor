@@ -8,6 +8,8 @@
 
         public bool Saved { get; set; } = true;
 
-        public MetaData? MetaData { get; set; } = new MetaData();
+        public bool NewArticle { get; set; }
+
+        public MetaData MetaData { get; set; } = new MetaData();
     }
 }

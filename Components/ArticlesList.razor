@@ -3,8 +3,8 @@
 @inject ISnackbar SnackBar
 
 <div style="display: flex;">
-    <MudButton Variant="Variant.Text" Color="Color.Primary">新建</MudButton>
-    <MudButton Variant="Variant.Text" Color="Color.Secondary">保存全部</MudButton>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="NewArticle">新建</MudButton>
+    <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="SaveAllArticles">保存全部</MudButton>
     <MudSpacer />
     <MudIconButton Color="Color.Error" Icon="@Icons.Material.Filled.Close" OnClick="@(() => Common.InvokeArticleListClicked())"></MudIconButton>
 </div>
@@ -73,6 +73,12 @@
 
     [Parameter]
     public EventCallback<List<Article>> OnDeleteArticles { get; set; }
+
+    [Parameter]
+    public EventCallback<Article> OnCreateNewArticle { get; set; }
+
+    [Parameter]
+    public EventCallback<List<Article>> OnSaveArticles { get; set; }
 
     public List<Article> SelectedValues { get; set; } = [];
 
@@ -193,6 +199,13 @@
         if (result.GetValueOrDefault(false))
         {
             await OnDiscardEditContent.InvokeAsync(article);
+            if (article.NewArticle)
+            {
+                Articles.Remove(article);
+                RefilterArticles();
+                CurrentArticle = new();
+                StateHasChanged();
+            }
         }
     }
 
@@ -261,5 +274,30 @@
             CurrentArticle = new();
         }
         SelectedValues = [];
+    }
+
+    private async void NewArticle()
+    {
+        var newArticle = new Article
+        {
+            FilePath = Path.Combine(AppConfig.HexoArticlePath, "new.md"),
+            MetaData = new MetaData(),
+            Name = $"新文章{Articles.Count(x => x.Name.StartsWith("新文章")) + 1}",
+            Saved = false,
+            NewArticle = true
+        };
+        Articles.Insert(0, newArticle);
+        RefilterArticles();
+
+        MultiSelect = false;
+        CurrentArticle = newArticle;
+        SelectedValues = [CurrentArticle];
+
+        await OnCreateNewArticle.InvokeAsync(newArticle);
+    }
+
+    private async void SaveAllArticles()
+    {
+        await OnSaveArticles.InvokeAsync(Articles.Where(x=>x.Saved is false).ToList());
     }
 }

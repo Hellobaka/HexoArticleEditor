@@ -1,5 +1,6 @@
 ﻿@using HexoArticleEditor.Model
 @using MudBlazor.Services
+@using System.Text
 @page "/"
 @inject IJSRuntime JS
 @inject IBrowserViewportService BrowserViewportService
@@ -88,7 +89,7 @@
 
 <MudDrawer Width="350px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
     <div class="pa-2">
-        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" OnHideArticles="OnHideArticles" OnDeleteArticles="OnDeleteArticles" @ref="ArticlesList" />
+        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" OnHideArticles="OnHideArticles" OnDeleteArticles="OnDeleteArticles" @ref="ArticlesList" OnCreateNewArticle="OnCreateNewArticle" OnSaveArticles="OnSaveArticles" />
     </div>
 </MudDrawer>
 
@@ -203,7 +204,7 @@
                     command: null,
                 },
             ]);
-            
+
             // Ctrl + S 保存内容
             monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async function () {
                 await homePage.invokeMethodAsync('NoticeMonacoEditorSaved');
@@ -254,7 +255,7 @@
                         const file = new File([blob], `.${extension}`)
 
                         const nativeUpload = document.getElementById('nativeUpload')
-                        if (!nativeUpload) { 
+                        if (!nativeUpload) {
                             continue
                         }
                         // 构造InputFile参数
@@ -319,6 +320,8 @@
             // 初始化统计词数
             updateWordCount(countWords(getModelValue()));
             editorLoaded = true
+
+            homePage.invokeMethodAsync('OnMonacoEditorLoaded')
         });
     }
 
@@ -345,12 +348,19 @@
         return result;
     }
 
+    function getModelValueByName(modelName) {
+        if (modelList[modelName]) {
+            return modelList[modelName].getValue();
+        }
+        return '';
+    }
+
     // 设置编辑器当前Model
     function setModelValue(modelName, value, forced) {
-        if (modelList[modelName] && !forced){
+        if (modelList[modelName] && !forced) {
             // modelList[modelName].setValue(value);
             monacoEditor.setModel(modelList[modelName])
-        } else if(forced) {
+        } else if (forced) {
             modelList[modelName].setValue(value);
             monacoEditor.setModel(modelList[modelName])
         } else {
@@ -359,6 +369,13 @@
             monacoEditor.setModel(model)
         }
         homePage.invokeMethodAsync('NoticeRefreshPreview');
+    }
+
+    function deleteModel(modelName) {
+        if (modelList[modelName]) {
+            modelList[modelName].dispose()
+            modelList = modelList.slice(modelList.indexOf(modelList[modelName]), 1)
+        }
     }
 
     // 更新词数显示元素
@@ -592,8 +609,8 @@
     }
 
     window.addEventListener('beforeunload', (event) => {
-      event.preventDefault();
-      event.returnValue = '';
+        event.preventDefault();
+        event.returnValue = '';
     });
 
 </script>
@@ -613,14 +630,15 @@
         height: calc(100vh - 88px);
     }
 
-    .short-editor{
+    .short-editor {
         height: calc(100vh - 368px);
     }
+
     .hidden {
         display: none;
     }
 </style>
-    @code {
+@code {
     Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
 
     ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
@@ -633,7 +651,7 @@
 
     private bool ShowDrawerPreview { get; set; }
 
-    public bool Loading { get; set; }
+    public bool Loading { get; set; } = true;
 
     public bool ArticleListDisplay { get; set; }
 
@@ -653,7 +671,7 @@
 
     private Debouncer Debouncer { get; set; } = new();
 
-    private Article CurrentArticle { get; set; } = new();
+    private Article CurrentArticle { get; set; } = new() { NewArticle = true };
 
     private ArticlesList ArticlesList { get; set; } = new();
 
@@ -662,6 +680,16 @@
     protected override void OnInitialized()
     {
         PageInstance = DotNetObjectReference.Create(this);
+        var ls = Directory.GetFiles(AppConfig.HexoArticlePath).Select(x => Path.GetFileNameWithoutExtension(x)).ToArray();
+        for (int i = 0; i < ls.Length; i++)
+        {
+            string name = $"未命名{i + 1}";
+            if (!ls.Contains(name))
+            {
+                CurrentArticle.MetaData.Title = name;
+                break;
+            }
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -681,6 +709,13 @@
             AutoSaveTimer.Enabled = true;
             AutoSaveTimer.Start();
         }
+    }
+
+    [JSInvokable]
+    public async void OnMonacoEditorLoaded()
+    {
+        Loading = false;
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()
@@ -757,10 +792,28 @@
     }
 
     [JSInvokable]
-    public async void NoticeMonacoEditorSaved()
+    public async Task NoticeMonacoEditorSaved()
     {
         try
         {
+            if (CurrentArticle.NewArticle)
+            {
+                var metaData = MetaDataEditorInstance.GetMetaData().Title;
+                var invalidChars = Path.GetInvalidFileNameChars();
+                StringBuilder stringBuilder = new();
+                for (int i = 0; i < metaData.Length; i++)
+                {
+                    if (invalidChars.Contains(metaData[i]))
+                    {
+                        stringBuilder.Append(' ');
+                    }
+                    else
+                    {
+                        stringBuilder.Append(metaData[i]);
+                    }
+                }
+                CurrentArticle.FilePath = Path.Combine(AppConfig.HexoArticlePath, stringBuilder.ToString() + ".md");
+            }
             File.WriteAllText(CurrentArticle.FilePath, await GetCurrentArticleValue());
             if (AppConfig.DeleteAutoSaveAfterSave)
             {
@@ -768,11 +821,19 @@
                 string dir = Path.Combine(AppConfig.HexoArticlePath, "autosave", Path.GetFileNameWithoutExtension(CurrentArticle.FilePath));
                 Directory.Delete(dir, true);
             }
+            if (CurrentArticle.NewArticle)
+            {
+                await JS.InvokeVoidAsync("deleteModel", CurrentArticle.Name);
+                CurrentArticle.Name = Path.GetFileNameWithoutExtension(CurrentArticle.FilePath);
+                CurrentArticle.NewArticle = false;
+
+                OnCurrentArticleChanged(CurrentArticle);
+            }
             // 通知文件列表更新文件保存状态
             ArticlesList.OnArticleSaveStateChanged(CurrentArticle, true);
             SnackBar.Add($"文章已保存", Severity.Success);
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             SnackBar.Add($"保存文章时发生异常: {e.Message}", Severity.Error);
         }
@@ -876,7 +937,12 @@
         Loading = true;
         await Task.Run(async () =>
         {
-            if (File.Exists(article.FilePath))
+            if (article.NewArticle)
+            {
+                CurrentArticle = article;
+                await SetModelValue(article.Name, "");
+            }
+            else if (File.Exists(article.FilePath))
             {
                 CurrentArticle = article;
                 string content = File.ReadAllText(article.FilePath);
@@ -898,8 +964,8 @@
 
     private async void AutoSaveTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
     {
-        // 触发条件：文章处于未保存状态
-        if (CurrentArticle == null || CurrentArticle.Saved)
+        // 触发条件：文章处于未保存状态且不是新文章
+        if (CurrentArticle == null || CurrentArticle.Saved || CurrentArticle.NewArticle)
         {
             return;
         }
@@ -916,11 +982,11 @@
             if (fileList.Length > AppConfig.AutoSaveMaxCount
                 && File.Exists(fileList.FirstOrDefault()))
             {
-                File.Delete (fileList.First());
+                File.Delete(fileList.First());
             }
             await JS.InvokeVoidAsync("updateStatus", $"自动保存完成 {DateTime.Now:G}");
         }
-        catch(Exception exc)
+        catch (Exception exc)
         {
             SnackBar.Add($"自动保存失败：{exc.Message}", Severity.Error);
         }
@@ -961,6 +1027,13 @@
             SnackBar.Add("当前文章没有要抛弃的内容", Severity.Warning);
             return;
         }
+        if (CurrentArticle.NewArticle)
+        {
+            CurrentArticle = new();
+            await SetModelValue("default", "");
+            StateHasChanged();
+            return;
+        }
         Loading = true;
         await Task.Run(async () =>
         {
@@ -983,7 +1056,7 @@
         int deleteCount = 0;
         await Task.Run(() =>
         {
-            foreach(var item in articles)
+            foreach (var item in articles)
             {
                 if (File.Exists(item.FilePath))
                 {
@@ -1048,5 +1121,46 @@
             await SetModelValue("default", "");
         }
         StateHasChanged();
+    }
+
+    private async void OnCreateNewArticle(Article article)
+    {
+        // 新文章创建
+        // 创建model
+        // 保存时删除model，从元数据获取文件名，之后重新打开model
+        Loading = true;
+
+        CurrentArticle = article;
+        await JS.InvokeVoidAsync("setModelValue", article.Name, "Hello world");
+
+        Loading = false;
+        await InvokeAsync(() => StateHasChanged());
+    }
+
+    private async void OnSaveArticles(List<Article> articles)
+    {
+        Loading = true;
+        foreach (var item in articles)
+        {
+            try
+            {
+                string content = await JS.InvokeAsync<string>("getModelValueByName", item.Name);
+                if (string.IsNullOrEmpty(content))
+                {
+                    continue;
+                }
+                content = item.MetaData.ParseToRaw() + content;
+
+                File.WriteAllText(item.FilePath, content);
+                ArticlesList.OnArticleSaveStateChanged(item, true);
+            }
+            catch(Exception e)
+            {
+                SnackBar.Add($"无法获取文章: {item.Name} 的文章内容，保存失败，由于 {e.Message}", Severity.Error);
+            }
+        }
+        Loading = false;
+        StateHasChanged();
+        SnackBar.Add("全部保存完成", Severity.Success);
     }
 }
