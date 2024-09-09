@@ -635,34 +635,27 @@
         display: none;
     }
 </style>
+
 @code {
-    Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
-
-    ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
-        {
-            ReportRate = 250,
-            NotifyOnBreakpointOnly = true
-        };
-
-    public bool ShowStaticPreview { get; set; } = true;
+    private bool ShowStaticPreview { get; set; } = true;
 
     private bool ShowDrawerPreview { get; set; }
 
-    public bool Loading { get; set; } = true;
+    private bool Loading { get; set; } = true;
 
-    public bool ArticleListDisplay { get; set; }
+    private bool ArticleListDisplay { get; set; }
 
-    public bool TerminalDisplay { get; set; } = false;
+    private bool TerminalDisplay { get; set; } = false;
 
-    public string TabStopDisplay { get; set; } = "空格：4";
+    private string TabStopDisplay { get; set; } = "空格：4";
 
-    public double UploadProgress { get; set; } = 0;
+    private double UploadProgress { get; set; } = 0;
 
-    public InputFile inputFile { get; set; } = null;
+    private InputFile inputFile { get; set; } = new();
 
-    private MarkdownPreview Preview { get; set; }
+    private MarkdownPreview Preview { get; set; } = new();
 
-    private MetaDataEditor MetaDataEditorInstance { get; set; }
+    private MetaDataEditor MetaDataEditorInstance { get; set; } = new();
 
     private DotNetObjectReference<Editor>? PageInstance { get; set; }
 
@@ -672,7 +665,30 @@
 
     private ArticlesList ArticlesList { get; set; } = new();
 
-    private System.Timers.Timer AutoSaveTimer { get; set; }
+    private System.Timers.Timer AutoSaveTimer { get; set; } = new();
+    
+    #region ViewportObserver
+    Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
+
+    ResizeOptions IBrowserViewportObserver.ResizeOptions { get; } = new()
+    {
+        ReportRate = 250,
+        NotifyOnBreakpointOnly = true
+    };
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs e)
+    {
+        ShowStaticPreview = e.Breakpoint switch
+        {
+            Breakpoint.Lg => true,
+            Breakpoint.Xl => true,
+            Breakpoint.Md => true,
+            _ => false
+        };
+        PreviewShowAndRefresh();
+        return InvokeAsync(StateHasChanged);
+    }
+    #endregion
 
     protected override void OnInitialized()
     {
@@ -707,13 +723,6 @@
         }
     }
 
-    [JSInvokable]
-    public async void OnMonacoEditorLoaded()
-    {
-        Loading = false;
-        StateHasChanged();
-    }
-
     public async ValueTask DisposeAsync()
     {
         await BrowserViewportService.UnsubscribeAsync(this);
@@ -729,24 +738,37 @@
         }
     }
 
-    public async void DarkThemeChanged(bool darkTheme)
+    private async void DarkThemeChanged(bool darkTheme)
     {
         await JS.InvokeVoidAsync("changeEditorTheme", darkTheme);
         await Preview.ReloadFrame();
     }
+    
+    private async void ArticleListDisplayChanged()
+    {
+        ArticleListDisplay = !ArticleListDisplay;
+        await InvokeAsync(() => StateHasChanged());
+    }
 
-    public async Task<string> GetModelValue()
+    private async void TerminalDisplayChanged()
+    {
+        TerminalDisplay = !TerminalDisplay;
+        await InvokeAsync(() => StateHasChanged());
+        await JS.InvokeVoidAsync("toggleTerminalVisibility", TerminalDisplay);
+    }
+
+    private async Task<string> GetModelValue()
     {
         var str = await JS.InvokeAsync<string>("getModelValue");
         return str;
     }
 
-    public async Task SetModelValue(string modelName, string content, bool forced = false)
+    private async Task SetModelValue(string modelName, string content, bool forced = false)
     {
         await JS.InvokeVoidAsync("setModelValue", modelName, content, forced);
     }
 
-    public async void PreviewShowAndRefresh()
+    private async void PreviewShowAndRefresh()
     {
         if (!ShowStaticPreview)
         {
@@ -754,18 +776,12 @@
         }
         await Preview.ReloadFrame();
     }
-
-    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs e)
+    
+    [JSInvokable]
+    public void OnMonacoEditorLoaded()
     {
-        ShowStaticPreview = e.Breakpoint switch
-        {
-            Breakpoint.Lg => true,
-            Breakpoint.Xl => true,
-            Breakpoint.Md => true,
-            _ => false
-        };
-        PreviewShowAndRefresh();
-        return InvokeAsync(StateHasChanged);
+        Loading = false;
+        StateHasChanged();
     }
 
     [JSInvokable]
@@ -834,18 +850,18 @@
         }
     }
 
-    public async void TabStopChanged(bool isTab, int count)
+    private async void TabStopChanged(bool isTab, int count)
     {
         TabStopDisplay = $"{(isTab ? "制表符" : "空格")}：{count}";
         await JS.InvokeVoidAsync("updateTabStop", isTab, count);
     }
 
-    public async void ToolAction(string action)
+    private async void ToolAction(string action)
     {
         await JS.InvokeVoidAsync("EditAction", action);
     }
 
-    public async Task ImageUploaded(IBrowserFile upload)
+    private async Task ImageUploaded(IBrowserFile upload)
     {
         UploadProgress = 0;
         await JS.InvokeVoidAsync("updateEditorEnable", false);
@@ -901,7 +917,7 @@
         }
     }
 
-    async Task OnNativeUpload(InputFileChangeEventArgs e)
+    private async Task OnNativeUpload(InputFileChangeEventArgs e)
     {
         await ImageUploaded(e.File);
     }
@@ -914,20 +930,7 @@
         return metaDataRaw + content;
     }
 
-    private async void ArticleListDisplayChanged()
-    {
-        ArticleListDisplay = !ArticleListDisplay;
-        await InvokeAsync(() => StateHasChanged());
-    }
-
-    private async void TerminalDisplayChanged()
-    {
-        TerminalDisplay = !TerminalDisplay;
-        await InvokeAsync(() => StateHasChanged());
-        await JS.InvokeVoidAsync("toggleTerminalVisibility", TerminalDisplay);
-    }
-
-    public async void OnCurrentArticleChanged(Article article)
+    private async void OnCurrentArticleChanged(Article article)
     {
         Loading = true;
         await Task.Run(async () =>

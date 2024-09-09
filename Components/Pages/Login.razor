@@ -14,7 +14,7 @@
         </MudCardContent>
         <MudCardActions>
             <MudSwitch @bind-Value="RememberPassword" Color="Color.Primary" Style="margin-left: 1px;">记住密码</MudSwitch>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="LoginClick" Style="margin-left: 10px;">连接</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="OnLogin" Style="margin-left: 10px;">连接</MudButton>
         </MudCardActions>
     </MudCard>
 </MudContainer>
@@ -36,10 +36,14 @@
     public string Password { get; set; } = "";
 
     private bool ShowPassword { get; set; }
+
     private InputType PasswordInput { get; set; } = InputType.Password;
+
     private string PasswordInputIcon { get; set; } = Icons.Material.Filled.VisibilityOff;
+
     private bool RememberPassword { get; set; }
-    private MudTextField<string> PasswordInputComponent { get; set; } = null;
+
+    private MudTextField<string> PasswordInputComponent { get; set; } = new();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -67,7 +71,7 @@
         }
     }
 
-    private async Task LoginClick()
+    private async Task OnLogin()
     {
         await PasswordInputComponent.BlurAsync();
         if (!await _authProvider.AuthenticateUser(Password))
@@ -91,7 +95,7 @@
     {
         if (e.Code.ToLower().Contains("enter"))
         {
-            await LoginClick();
+            await OnLogin();
         }
     }
 }

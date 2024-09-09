@@ -83,21 +83,21 @@
     [Parameter]
     public EventCallback<List<Article>> OnSaveArticles { get; set; }
 
-    public List<Article> SelectedValues { get; set; } = [];
+    private List<Article> SelectedValues { get; set; } = [];
 
-    public Article CurrentArticle { get; set; } = new();
+    private Article CurrentArticle { get; set; } = new();
 
-    public string Search { get; set; } = "";
+    private string Search { get; set; } = "";
 
-    public List<Article> Articles { get; set; } = [];
+    private List<Article> Articles { get; set; } = [];
 
-    public List<Article> DisplayArticles { get; set; } = [];
+    private List<Article> DisplayArticles { get; set; } = [];
 
-    public bool MultiSelect { get; set; }
+    private bool MultiSelect { get; set; }
 
-    public bool Loading { get; set; } = true;
+    private bool Loading { get; set; } = true;
 
-    public Debouncer Debouncer { get; set; } = new();
+    private Debouncer Debouncer { get; set; } = new();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -133,26 +133,32 @@
         StateHasChanged();
     }
 
-    public void RefilterArticles()
+    public void OnArticleSaveStateChanged(Article article, bool saveState)
+    {
+        article.Saved = saveState;
+        StateHasChanged();
+    }
+
+    private void RefilterArticles()
     {
         DisplayArticles = Articles.Where(x => x.Name.ToLower().Contains(Search)).ToList();
         InvokeAsync(() => StateHasChanged());
     }
 
-    public void OnMultiSelectChanged(bool enabled)
+    private void OnMultiSelectChanged(bool enabled)
     {
         MultiSelect = enabled;
         SelectedValues = [CurrentArticle];
         StateHasChanged();
     }
 
-    public void OnSelectedArticlesChanged(IReadOnlyCollection<Article> selectedList)
+    private void OnSelectedArticlesChanged(IReadOnlyCollection<Article> selectedList)
     {
         SelectedValues = selectedList.Where(x => !string.IsNullOrEmpty(x.Name)).ToList();
         StateHasChanged();
     }
 
-    public void OnSelectedArticleChanged(Article selected)
+    private void OnSelectedArticleChanged(Article selected)
     {
         SelectedValues = [selected];
         CurrentArticle = selected;
@@ -160,16 +166,10 @@
         OnCurrentArticleChanged.InvokeAsync(selected);
     }
 
-    public void OnSearchChanged(string search)
+    private void OnSearchChanged(string search)
     {
         Search = search.ToLower();
         RefilterArticles();
-    }
-
-    public void OnArticleSaveStateChanged(Article article, bool saveState)
-    {
-        article.Saved = saveState;
-        StateHasChanged();
     }
 
     private async Task RevertAutoSaveClicked(Article article)

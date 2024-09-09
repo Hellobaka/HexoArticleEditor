@@ -4,7 +4,7 @@
 @inject IDialogService Dialog
 @inject IJSRuntime JS
 
-<MudThemeProvider Theme="@_theme" IsDarkMode="_isDarkMode" />
+<MudThemeProvider Theme="@Theme" IsDarkMode="DarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -36,37 +36,15 @@
     <a class="dismiss">🗙</a>
 </div>
 @code {
-    private bool _drawerOpen = true;
-    private bool _isDarkMode = true;
-    private MudTheme? _theme = null;
+    private bool DrawerOpen { get; set; } = true;
+
+    private bool DarkMode { get; set; } = true;
+
+    private MudTheme? Theme { get; set; } = null;
 
     private Settings SettingDialog { get; set; } = new();
 
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-
-        _theme = new()
-        {
-            PaletteLight = _lightPalette,
-            PaletteDark = _darkPalette,
-            LayoutProperties = new LayoutProperties()
-        };
-    }
-
-
-    private void DrawerToggle()
-    {
-        _drawerOpen = !_drawerOpen;
-    }
-
-    private void DarkModeToggle()
-    {
-        _isDarkMode = !_isDarkMode;
-        Common.InvokeDarkModeChanged(_isDarkMode);
-    }
-
-    private readonly PaletteLight _lightPalette = new()
+    private PaletteLight LightPalette { get; set; } = new()
     {
         Black = "#110e2d",
         AppbarText = "#424242",
@@ -76,7 +54,7 @@
         GrayLighter = "#f9f9f9",
     };
 
-    private readonly PaletteDark _darkPalette = new()
+    private PaletteDark DarkPalette { get; set; } = new()
     {
         Primary = "#7e6fff",
         Surface = "#1e1e2d",
@@ -105,11 +83,34 @@
         OverlayLight = "#1e1e2d80",
     };
 
-    public string DarkLightModeButtonIcon => _isDarkMode switch
+    private string DarkLightModeButtonIcon => DarkMode switch
     {
         true => Icons.Material.Rounded.AutoMode,
         false => Icons.Material.Outlined.DarkMode,
     };
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        Theme = new()
+        {
+            PaletteLight = LightPalette,
+            PaletteDark = DarkPalette,
+            LayoutProperties = new LayoutProperties()
+        };
+    }
+
+    private void DrawerToggle()
+    {
+        DrawerOpen = !DrawerOpen;
+    }
+
+    private void DarkModeToggle()
+    {
+        DarkMode = !DarkMode;
+        Common.InvokeDarkModeChanged(DarkMode);
+    }
 
     private async void Logout()
     {
