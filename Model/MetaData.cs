@@ -31,7 +31,7 @@ namespace HexoArticleEditor.Model
             {
                 sb.AppendLine($"\"title\": \"{Title}\",");
                 sb.AppendLine($"\"date\": \"{createTime:G}\",");
-                sb.AppendLine($"\"updated\": {UpdateTime:G},");
+                sb.AppendLine($"\"updated\": \"{UpdateTime:G}\",");
                 sb.AppendLine($"\"tags\": {JArray.FromObject(Tags)},");
                 sb.AppendLine($"\"categories\": {JArray.FromObject(Categories)},");
                 sb.AppendLine($"\"cover\": \"{Cover}\"");

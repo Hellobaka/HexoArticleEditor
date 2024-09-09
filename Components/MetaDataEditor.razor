@@ -1,6 +1,6 @@
 ﻿@using HexoArticleEditor.Model
 @inject IDialogService Dialog
-@inject ISnackbar Snackbar
+@inject ISnackbar SnackBar
 
 <div id="metaData" class="pa-4">
     <div style="display: flex; align-items: baseline;">
@@ -41,7 +41,7 @@
             </MudChipSet>
             <div style="display:flex; align-items: flex-start; margin-top: 10px;">
                 <MudText Style="margin-right: 10px; margin-bottom: 10px;">头图:</MudText>
-                <MudImage onclick="@(() => OnHeadImageClicked())" Style="max-width: calc(100% - 40px); margin-top: 10px; cursor: pointer;" Src="https://mudblazor.com/images/iceland.jpg" Class="rounded-lg" />
+                <MudImage onclick="@(() => OnHeadImageClicked())" Style="max-width: calc(100% - 50px); margin-top: 10px; cursor: pointer;" Src="@MetaData.Cover" Class="rounded-lg" />
             </div>
         </div>
     </MudCollapse>
@@ -50,11 +50,21 @@
 <MudDialog @ref="UploadDialog">
     <DialogContent>
         <MudStack>
-            <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles">
+            <MudFileUpload T="IBrowserFile" FilesChanged="UploadFiles" Accept=".png,.jpg,.bmp,.webp">
                 <ActivatorContent>
-                    <MudButton Color="Color.Primary">上传图片</MudButton>
+                    <MudButton Color="Color.Primary">
+                        上传图片
+                        @if (UploadProgress > 0 || UploadProgress < 100)
+                        {
+                            <MudProgressCircular Size="Size.Small" Value="UploadProgress" Color="Color.Primary" Style="max-width: calc(100% - 40px); margin-top: 10px;"></MudProgressCircular>
+                        }
+                    </MudButton>
                 </ActivatorContent>
             </MudFileUpload>
+            @if (!string.IsNullOrEmpty(UploadImagePath))
+            {
+                <MudImage Src="@UploadImagePath" Class="rounded-lg"></MudImage>
+            }
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -99,6 +109,10 @@
 
     private MudTextField<string> CategoryTextField { get; set; }
 
+    private double UploadProgress { get; set; }
+
+    private string UploadImagePath { get; set; } = "";
+
     public MetaData GetMetaData()
     {
         return MetaData;
@@ -111,12 +125,13 @@
 
     private async void OnHeadImageClicked()
     {
+        UploadImagePath = MetaData.Cover;
         await UploadDialog.ShowAsync("修改头图", new DialogOptions
-            {
-                FullWidth = true,
-                BackdropClick = false,
-                CloseOnEscapeKey = false,
-            });
+        {
+            FullWidth = true,
+            BackdropClick = false,
+            CloseOnEscapeKey = false,
+        });
     }
 
     private async void OnSaveClicked()
@@ -127,12 +142,62 @@
     private async void CloseDialog(bool result)
     {
         await UploadDialog.CloseAsync(result ? DialogResult.Ok(true) : DialogResult.Cancel());
+        if (result)
+        {
+            MetaData.Cover = UploadImagePath;
+        }
     }
 
-    private void UploadFiles(IBrowserFile file)
+    private async Task UploadFiles(IBrowserFile upload)
     {
-        _files.Add(file);
-        //TODO upload the files to the server
+        _files.Add(upload);
+        try
+        {
+            if (upload == null)
+            {
+                return;
+            }
+            UploadImagePath = "";
+            var date = DateTime.Now;
+            string path = Path.Combine(AppConfig.HexoImagePath, date.Year.ToString(), date.Month.ToString());
+            Directory.CreateDirectory(path);
+            string fileName = upload.Name;
+            if (!AppConfig.UseUploadFileName)
+            {
+                fileName = DateTime.Now.ToString("yyyyMMddHHmmss") + Path.GetExtension(fileName);
+            }
+            if (fileName.StartsWith("."))
+            {
+                fileName = DateTime.Now.ToString("yyyyMMddHHmmss") + fileName;
+            }
+
+            await using FileStream writeStream = new(Path.Combine(path, fileName), FileMode.OpenOrCreate);
+
+            using var readStream = upload.OpenReadStream(AppConfig.MaxFileSize);
+            var bytesRead = 0;
+            var totalRead = 0;
+            var buffer = new byte[1024 * 10];
+
+            while ((bytesRead = await readStream.ReadAsync(buffer)) != 0)
+            {
+                totalRead += bytesRead;
+                await writeStream.WriteAsync(buffer, 0, bytesRead);
+                UploadProgress = (totalRead / upload.Size) * 100;
+                await Task.Delay(100);
+                StateHasChanged();
+            }
+            SnackBar.Add("图片上传成功", Severity.Success);
+            UploadImagePath = Path.GetRelativePath(Path.Combine(AppConfig.HexoBasePath, "public"), Path.Combine(path, fileName)).Replace('\\', '/');
+        }
+        catch (Exception e)
+        {
+            SnackBar.Add("上传图片失败，信息: " + e.Message, Severity.Error);
+        }
+        finally
+        {
+            UploadProgress = 0;
+            StateHasChanged();
+        }
     }
 
     private void OnTagDeleted(MudChip<string> chip)
@@ -158,7 +223,7 @@
             }
             if (MetaData.Tags.Any(x => x == TagInput))
             {
-                Snackbar.Add("Tag 重复添加", Severity.Warning);
+                SnackBar.Add("Tag 重复添加", Severity.Warning);
                 return;
             }
             else
@@ -184,7 +249,7 @@
             }
             if (MetaData.Categories.Any(x => x == CategoryInput))
             {
-                Snackbar.Add("分类重复添加", Severity.Warning);
+                SnackBar.Add("分类重复添加", Severity.Warning);
                 return;
             }
             else

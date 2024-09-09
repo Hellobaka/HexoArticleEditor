@@ -1,6 +1,8 @@
 using MudBlazor.Services;
 using HexoArticleEditor.Components;
 using HexoArticleEditor;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 AppConfig.Load();
 if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
@@ -78,9 +80,86 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+CreateSymbolLinkToImageFolder();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+void CreateSymbolLinkToImageFolder()
+{
+    string path1 = Path.Combine(AppConfig.HexoBasePath, "public", "images");
+    string path2 = Path.GetFullPath("wwwroot") + "\\images";
+    bool result;
+    if (Directory.Exists(path2))
+    {
+        Directory.Delete(path2, true);
+    }
+    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    {
+        result = CreateSymbolicLinkWindows(path2, path1);
+        if (!result)
+        {
+            Console.WriteLine("[-]GetLastError = " + Marshal.GetLastWin32Error());
+        }
+    }
+    else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+    {
+        result = CreateSymbolicLinkLinux(path2, path1);
+    }
+    else
+    {
+        throw new PlatformNotSupportedException();
+    }
+
+    if (!result)
+    {
+        Console.WriteLine("[-]创建符号链接被拒绝，请提升权限");
+    }
+}
+
+[DllImport("kernel32.dll", EntryPoint = "CreateSymbolicLinkW", CharSet = CharSet.Unicode, SetLastError = true)] 
+static extern int CreateSymbolicLink(string lpSymlinkFileName, string lpTargetFileName, uint dwFlags);
+
+const uint SYMBOLIC_LINK_FLAG_FILE = 0x0;
+const uint SYMBOLIC_LINK_FLAG_DIRECTORY = 0x1;
+
+bool CreateSymbolicLinkWindows(string symlink, string target)
+{
+    uint flags = SYMBOLIC_LINK_FLAG_FILE;
+    symlink = Path.GetFullPath(symlink);
+
+    // Check if the target is a directory
+    if (Directory.Exists(target))
+    {
+        flags = SYMBOLIC_LINK_FLAG_DIRECTORY;
+    }
+
+    return CreateSymbolicLink(symlink, target, flags) == 1;
+}
+
+bool CreateSymbolicLinkLinux(string symlink, string target)
+{
+    try
+    {
+        Process process = new Process();
+        process.StartInfo.FileName = "ln";
+        process.StartInfo.Arguments = $"-s \"{target}\" \"{symlink}\"";
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+
+        process.Start();
+        process.WaitForExit();
+
+        return process.ExitCode == 0;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Exception: {ex.Message}");
+        return false;
+    }
+}

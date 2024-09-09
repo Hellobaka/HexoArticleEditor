@@ -298,6 +298,6 @@
 
     private async void SaveAllArticles()
     {
-        await OnSaveArticles.InvokeAsync(Articles.Where(x=>x.Saved is false).ToList());
+        await OnSaveArticles.InvokeAsync(Articles.Where(x => x.Saved is false).ToList());
     }
 }
