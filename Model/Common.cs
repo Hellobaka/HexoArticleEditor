@@ -8,8 +8,6 @@
 
         public static event Action? TerminalClicked;
 
-        public static event Action<Article>? OnCurrentArticleChanged;
-
         public static void InvokeDarkModeChanged(bool darkMode)
         {
             DarkThemeChanged?.Invoke(darkMode);
@@ -24,15 +22,5 @@
         {
             TerminalClicked?.Invoke();
         }
-
-        public static void InvokeCurrentArticleChanged(Article? article)
-        {
-            if (article != null) 
-            {
-                OnCurrentArticleChanged?.Invoke(article);
-            }
-        }
-
-        public static bool IsDarkMode { get; set; } = true;
     }
 }

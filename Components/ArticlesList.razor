@@ -69,6 +69,9 @@
     public EventCallback<Article> OnDiscardEditContent { get; set; }
 
     [Parameter]
+    public EventCallback<Article> OnCurrentArticleChanged { get; set; }
+
+    [Parameter]
     public EventCallback<List<Article>> OnHideArticles { get; set; }
 
     [Parameter]
@@ -154,7 +157,7 @@
         SelectedValues = [selected];
         CurrentArticle = selected;
         StateHasChanged();
-        Common.InvokeCurrentArticleChanged(selected);
+        OnCurrentArticleChanged.InvokeAsync(selected);
     }
 
     public void OnSearchChanged(string search)

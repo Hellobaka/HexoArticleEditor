@@ -85,7 +85,7 @@
 
 <MudDrawer Width="350px" @bind-Open="@ArticleListDisplay" Anchor="@Anchor.Left" Elevation="10" ClipMode="@DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
     <div class="pa-2">
-        <ArticlesList OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" OnHideArticles="OnHideArticles" OnDeleteArticles="OnDeleteArticles" @ref="ArticlesList" OnCreateNewArticle="OnCreateNewArticle" OnSaveArticles="OnSaveArticles" />
+        <ArticlesList OnCurrentArticleChanged="OnCurrentArticleChanged" OnRevertAutoSave="OnRevertAutoSave" OnDiscardEditContent="OnDiscardEditContent" OnHideArticles="OnHideArticles" OnDeleteArticles="OnDeleteArticles" @ref="ArticlesList" OnCreateNewArticle="OnCreateNewArticle" OnSaveArticles="OnSaveArticles" />
     </div>
 </MudDrawer>
 
@@ -696,7 +696,6 @@
             Common.DarkThemeChanged += DarkThemeChanged;
             Common.ArticleListClicked += ArticleListDisplayChanged;
             Common.TerminalClicked += TerminalDisplayChanged;
-            Common.OnCurrentArticleChanged += OnCurrentArticleChanged;
             await JS.InvokeVoidAsync("initEditor", PageInstance);
             await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
 
@@ -721,7 +720,6 @@
         Common.DarkThemeChanged -= DarkThemeChanged;
         Common.ArticleListClicked -= ArticleListDisplayChanged;
         Common.TerminalClicked -= TerminalDisplayChanged;
-        Common.OnCurrentArticleChanged -= OnCurrentArticleChanged;
 
         if (AutoSaveTimer != null && AutoSaveTimer.Enabled)
         {
