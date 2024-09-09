@@ -1,0 +1,63 @@
+﻿<MudDialog @ref="SettingDialog">
+    <DialogContent>
+        <MudSwitch T="bool" Color="Color.Primary" @bind-Value="@AppConfig.UseUploadFileName">上传文件使用原始文件名</MudSwitch>
+        <div style="margin-top: 10px;">
+            <MudTextField T="int" Label="自动保存间隔时长(分钟)" @bind-Value="AppConfig.AutoSaveIntervalMinutes"></MudTextField>
+        </div>
+        <div style="margin-top: 10px;">
+            <MudTextField T="int" Label="最大自动保存节点数量" @bind-Value="AppConfig.AutoSaveMaxCount"></MudTextField>
+        </div>
+        <MudSwitch T="bool" Color="Color.Primary" Style="margin-top: 10px;" @bind-Value="AppConfig.DeleteAutoSaveAfterSave">保存时删除所有自动保存节点</MudSwitch>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="OnSettingSave">保存</MudButton>
+        <MudButton Color="Color.Secondary" OnClick="OnSettingCanceled">取消</MudButton>
+        <MudButton Color="Color.Error" OnClick="OnSettingRevert">重置</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    private MudDialog SettingDialog { get; set; } = new();
+
+    public async Task Show()
+    {
+        var dialog = await SettingDialog.ShowAsync("设置", options: new DialogOptions { FullWidth = true, CloseOnEscapeKey = false });
+        var r = await dialog.Result;
+        if (r == null || r.Data == null)
+        {
+            await OnSettingCanceled();
+        }
+    }
+
+    private async void OnSettingSave()
+    {
+        await Task.Run(() =>
+        {
+            ConfigHelper.SetConfig("AutoSaveIntervalMinutes", AppConfig.AutoSaveIntervalMinutes);
+            ConfigHelper.SetConfig("AutoSaveMaxCount", AppConfig.AutoSaveMaxCount);
+            ConfigHelper.SetConfig("DeleteAutoSaveAfterSave", AppConfig.DeleteAutoSaveAfterSave);
+            ConfigHelper.SetConfig("UseUploadFileName", AppConfig.UseUploadFileName);
+        });
+        await SettingDialog.CloseAsync(DialogResult.Ok(true));
+    }
+
+    private async Task OnSettingCanceled()
+    {
+        await Task.Run(() =>
+        {
+            AppConfig.Load();
+        });
+        StateHasChanged();
+        await SettingDialog.CloseAsync(DialogResult.Cancel());
+    }
+
+    private async void OnSettingRevert()
+    {
+        await Task.Run(() =>
+        {
+            AppConfig.Load();
+        });
+        StateHasChanged();
+    }
+}

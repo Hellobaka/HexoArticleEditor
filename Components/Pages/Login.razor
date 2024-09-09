@@ -46,8 +46,8 @@
         if (firstRender)
         {
             Password = await JS.InvokeAsync<string>("getPassword");
-            StateHasChanged();
             RememberPassword = !string.IsNullOrEmpty(Password);
+            StateHasChanged();
         }
     }
 

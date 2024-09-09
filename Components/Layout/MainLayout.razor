@@ -14,7 +14,7 @@
                 <MudMenu Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
                     <MudMenuItem OnClick="@(() => Common.InvokeArticleListClicked())">文章列表</MudMenuItem>
                     <MudMenuItem OnClick="@(() => Common.InvokeTerminalClicked())">终端</MudMenuItem>
-                    <MudMenuItem>设置</MudMenuItem>
+                    <MudMenuItem OnClick="ShowSettingDialog">设置</MudMenuItem>
                 </MudMenu>
             </AuthorizeView>
             <MudText Typo="Typo.h5" Class="ml-3">HexoAritcleEditor</MudText>
@@ -28,7 +28,7 @@
         @Body
     </MudMainContent>
 </MudLayout>
-
+<Settings @ref="SettingDialog" />
 
 <div id="blazor-error-ui">
     异常发生，需要刷新页面.
@@ -39,6 +39,8 @@
     private bool _drawerOpen = true;
     private bool _isDarkMode = true;
     private MudTheme? _theme = null;
+
+    private Settings SettingDialog { get; set; } = new();
 
     protected override void OnInitialized()
     {
@@ -118,5 +120,10 @@
             await _authProvider.UpdateSignInStatusAsync(null);
             await JS.InvokeVoidAsync("savePassword", "");
         }
+    }
+
+    private async void ShowSettingDialog()
+    {
+        await SettingDialog.Show();
     }
 }
