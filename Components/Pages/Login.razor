@@ -1,0 +1,97 @@
+﻿@page "/login"
+@inject SessionStorageProvider _authProvider
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+
+<MudContainer Style="height: 100%; display: flex; justify-content: center; align-items: center;">
+    <MudCard Elevation="19" Style="width: 70%; padding: 10px;">
+        <MudCardHeader>
+            <h3>后台存储的密码</h3>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTextField OnKeyDown="OnPasswordKeyDown" @ref="PasswordInputComponent" @bind-Value="Password" Label="密码" InputType="@PasswordInput" Adornment="Adornment.End" AdornmentIcon="@PasswordInputIcon" OnAdornmentClick="TogglePassword" AdornmentAriaLabel="显示密码" />
+        </MudCardContent>
+        <MudCardActions>
+            <MudSwitch @bind-Value="RememberPassword" Color="Color.Primary" Style="margin-left: 1px;">记住密码</MudSwitch>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="LoginClick" Style="margin-left: 10px;">连接</MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+<script>
+    function savePassword(password) {
+        if (!password) {
+            localStorage.removeItem('password')
+        } else {
+            localStorage.setItem('password', password)
+        }
+    }
+
+    function getPassword() {
+        return localStorage.getItem('password')
+    }
+</script>
+
+@code {
+    public string Password { get; set; } = "";
+
+    private bool ShowPassword { get; set; }
+    private InputType PasswordInput { get; set; } = InputType.Password;
+    private string PasswordInputIcon { get; set; } = Icons.Material.Filled.VisibilityOff;
+    private bool RememberPassword { get; set; }
+    private MudTextField<string> PasswordInputComponent { get; set; } = null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Password = await JS.InvokeAsync<string>("getPassword");
+            StateHasChanged();
+            RememberPassword = !string.IsNullOrEmpty(Password);
+        }
+    }
+
+    private void TogglePassword()
+    {
+        @if (ShowPassword)
+        {
+            ShowPassword = false;
+            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+            PasswordInput = InputType.Password;
+        }
+        else
+        {
+            ShowPassword = true;
+            PasswordInputIcon = Icons.Material.Filled.Visibility;
+            PasswordInput = InputType.Text;
+        }
+    }
+
+    private async Task LoginClick()
+    {
+        await PasswordInputComponent.BlurAsync();
+        if (!await _authProvider.AuthenticateUser(Password))
+        {
+            Snackbar.Add("密码错误", Severity.Error);
+        }
+        else
+        {
+            if (RememberPassword)
+            {
+                await JS.InvokeVoidAsync("savePassword", Password);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("savePassword", "");
+            }
+        }
+    }
+
+    private async void OnPasswordKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code.ToLower().Contains("enter"))
+        {
+            await LoginClick();
+        }
+    }
+}

@@ -3,6 +3,8 @@ using HexoArticleEditor.Components;
 using HexoArticleEditor;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Microsoft.AspNetCore.Components.Authorization;
+using HexoArticleEditor.Auth;
 
 AppConfig.Load();
 if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
@@ -68,6 +70,8 @@ builder.Services.AddSignalR(e => { e.MaximumReceiveMessageSize = AppConfig.MaxFi
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddScoped<SessionStorageProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(p => p.GetRequiredService<SessionStorageProvider>());
 
 var app = builder.Build();
 
