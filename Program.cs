@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Components.Authorization;
 using HexoArticleEditor.Auth;
+using System.Net;
 
 AppConfig.Load();
 if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
@@ -63,6 +64,10 @@ if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Listen(IPAddress.Parse(AppConfig.ListenIP), AppConfig.ListenPort);
+});
 
 // Add MudBlazor services
 builder.Services.AddMudServices();
