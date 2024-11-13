@@ -129,24 +129,11 @@ void CreateSymbolLinkToImageFolder()
     }
 }
 
-[DllImport("kernel32.dll", EntryPoint = "CreateSymbolicLinkW", CharSet = CharSet.Unicode, SetLastError = true)] 
-static extern int CreateSymbolicLink(string lpSymlinkFileName, string lpTargetFileName, uint dwFlags);
-
-const uint SYMBOLIC_LINK_FLAG_FILE = 0x0;
-const uint SYMBOLIC_LINK_FLAG_DIRECTORY = 0x1;
-
 bool CreateSymbolicLinkWindows(string symlink, string target)
 {
-    uint flags = SYMBOLIC_LINK_FLAG_FILE;
-    symlink = Path.GetFullPath(symlink);
-
-    // Check if the target is a directory
-    if (Directory.Exists(target))
-    {
-        flags = SYMBOLIC_LINK_FLAG_DIRECTORY;
-    }
-
-    return CreateSymbolicLink(symlink, target, flags) == 1;
+    var process =  Process.Start("cmd.exe", $"/C mklink /J {symlink} {target}");
+    process.WaitForExit();
+    return process.ExitCode == 0;
 }
 
 bool CreateSymbolicLinkLinux(string symlink, string target)
