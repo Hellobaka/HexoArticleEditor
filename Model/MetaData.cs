@@ -181,7 +181,7 @@ namespace HexoArticleEditor.Model
                 {
                     foreach (var tag in tags)
                     {
-                        metaData.Tags.Add(tag.ToString());
+                        metaData.Tags = [.. metaData.Tags.Concat(GetValueFromRecursionArray(tag))];
                     }
                 }
                 if (yaml.TryGetValue("categories", out value)
@@ -189,7 +189,7 @@ namespace HexoArticleEditor.Model
                 {
                     foreach (var category in categories)
                     {
-                        metaData.Categories.Add(category.ToString());
+                        metaData.Categories = [.. metaData.Categories.Concat(GetValueFromRecursionArray(category))];
                     }
                 }
                 if (yaml.TryGetValue("cover", out value)
@@ -217,6 +217,23 @@ namespace HexoArticleEditor.Model
             catch
             {
                 return null;
+            }
+        }
+
+        private static List<string> GetValueFromRecursionArray(object category)
+        {
+            if (category is List<object> list)
+            {
+                List<string> result = [];
+                foreach (var item in list)
+                {
+                    result = [.. result.Concat(GetValueFromRecursionArray(item))];
+                }
+                return result;
+            }
+            else
+            {
+                return [category.ToString()];
             }
         }
     }
