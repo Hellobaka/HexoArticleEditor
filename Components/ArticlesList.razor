@@ -115,7 +115,7 @@
         await Task.Delay(1000);
         await Task.Run(() =>
         {
-            foreach (var item in Directory.GetFiles(AppConfig.HexoArticlePath, "*.md"))
+            foreach (var item in Directory.GetFiles(AppConfig.HexoArticlePath, "*.md").OrderByDescending(x => x, new ArticleComparer()))
             {
                 var article = new Article { Name = Path.GetFileNameWithoutExtension(item), FilePath = item };
                 articles.Add(article);
@@ -125,7 +125,6 @@
                     article.Saved = a.Saved;
                 }
             }
-            articles = articles.OrderBy(x => x.Name).ToList();
             Articles = articles;
         });
         RefilterArticles();
