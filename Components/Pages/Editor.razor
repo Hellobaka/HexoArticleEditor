@@ -901,7 +901,7 @@
             await JS.InvokeVoidAsync("updateEditorEnable", true);
             await InvokeAsync(() =>
             {
-                JS.InvokeVoidAsync("appendTextToEditor", $@"![{fileName}]({Path.GetRelativePath(Path.Combine(AppConfig.HexoBasePath, "public"), Path.Combine(path, fileName)).Replace('\\', '/')})");
+                JS.InvokeVoidAsync("appendTextToEditor", $@"![{fileName}](../{Path.GetRelativePath(Path.Combine(AppConfig.HexoBasePath, "public"), Path.Combine(path, fileName)).Replace('\\', '/')})");
             });
             SnackBar.Add("图片上传成功", Severity.Success);
         }
