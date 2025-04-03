@@ -968,7 +968,7 @@
             return;
         }
         string fileName = Path.GetFileName(CurrentArticle.FilePath);
-        string dir = Path.Combine(AppConfig.HexoArticlePath, "autosave", Path.GetFileNameWithoutExtension(fileName));
+        string dir = Path.Combine(AppConfig.HexoArticlePath, "..", "autosave", Path.GetFileNameWithoutExtension(fileName));
         Directory.CreateDirectory(dir);
 
         string content = await GetCurrentArticleValue();
