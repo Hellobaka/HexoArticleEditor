@@ -41,7 +41,14 @@
             </MudChipSet>
             <div style="display:flex; align-items: flex-start; margin-top: 10px;">
                 <MudText Style="margin-right: 10px; margin-bottom: 10px;">头图:</MudText>
-                <MudImage onclick="@(() => OnHeadImageClicked())" Style="max-width: calc(100% - 50px); margin-top: 10px; cursor: pointer;" Src="@MetaData.Cover" Class="rounded-lg" />
+                @if (string.IsNullOrEmpty(MetaData.Cover)){
+                    <div onclick="@(() => OnHeadImageClicked())" Style="display:flex; justify-content: center; align-items: center; margin-top: 10px; cursor: pointer; width: 360px; height: 180px; border-radius: 10px; border: 1px gray dashed">
+                        <div>空</div>
+                    </div>
+                }
+                else{
+                    <MudImage onclick="@(() => OnHeadImageClicked())" Style="max-width: calc(100% - 50px); margin-top: 10px; cursor: pointer;" Src="@MetaData.Cover" Class="rounded-lg" />
+                }
             </div>
         </div>
     </MudCollapse>
@@ -68,6 +75,7 @@
         </MudStack>
     </DialogContent>
     <DialogActions>
+        <MudButton Color="Color.Default" OnClick="@(() => ClearImage())">清空</MudButton>
         <MudButton Color="Color.Secondary" OnClick="@(() => CloseDialog(false))">关闭</MudButton>
         <MudButton Color="Color.Primary" OnClick="@(() => CloseDialog(true))">保存</MudButton>
     </DialogActions>
@@ -210,6 +218,13 @@
     {
         MetaData.Categories.Remove(chip?.Text);
         StateHasChanged();
+    }
+
+    private void ClearImage()
+    {
+        MetaData.Cover = "";
+        StateHasChanged();
+        CloseDialog(false);
     }
 
     private async void OnTagInput(KeyboardEventArgs e)
