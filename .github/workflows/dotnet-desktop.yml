@@ -41,7 +41,7 @@ jobs:
       run: dotnet publish HexoArticleEditor.csproj /p:PublishProfile=FolderProfile.pubxml
 
     - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
              name: HexoArticleEditor
              path: bin\Release\net8.0\win-x64\publish\
