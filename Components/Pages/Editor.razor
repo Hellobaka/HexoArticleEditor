@@ -116,6 +116,8 @@
     var editorPage = {}
     var editorLoaded = false
     var modelList = []
+    var wordWrap = true;
+    var disposeToggleWordWrapAction = null;
 
     function initEditor(blazorPageInstance) {
         editorPage = blazorPageInstance
@@ -144,6 +146,7 @@
                 fontFamily: 'Consolas, \'Courier New\', \'微软雅黑\'',
                 minimap: { enabled: false },
                 renderWhitespace: true,
+                wordWrap: wordWrap ? "on" : "off"
             });
 
             const removableIds = ['editor.action.revealDefinition'
@@ -164,6 +167,8 @@
                     return !removableIds.includes(item.id);
                 });
             };
+
+            rebuildToggleWordWrapCommand(monacoEditor);
 
             monacoEditor.addAction({
                 id: 'select-all',
@@ -320,6 +325,27 @@
 
             editorPage.invokeMethodAsync('OnMonacoEditorLoaded')
         });
+    }
+
+    function rebuildToggleWordWrapCommand(editor) {
+        if (disposeToggleWordWrapAction) {
+            disposeToggleWordWrapAction.dispose();
+        }        
+        disposeToggleWordWrapAction = editor.addAction({
+            id: 'toggle-wordWrap',
+            label: (wordWrap ? '✅ ' : '') + '自动换行',
+            contextMenuGroupId: 'navigation',
+            contextMenuOrder: 1,
+            run: function (ed) {
+                toggleWordWrap(ed)
+                rebuildToggleWordWrapCommand(ed)
+            }
+        });
+    }
+
+    function toggleWordWrap(ed) {
+        wordWrap = !wordWrap;
+        ed.updateOptions({ wordWrap: wordWrap ? "on" : "off" });
     }
 
     // 词数统计
