@@ -9,30 +9,30 @@ using Microsoft.Extensions.FileProviders;
 AppConfig.Load();
 if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
 {
-    Console.Write("�ƺ��ǵ�һ�����������أ���Ҫָ��һ�� Hexo ��Ŀ¼��");
+    Console.Write("似乎是第一次启动软件呢！需要指定一下 Hexo 的目录：");
     string path = Console.ReadLine();
     if (string.IsNullOrEmpty(path))
     {
-        Console.WriteLine("�����·����Ч���ҵ�Ŀ¼��������");
+        Console.WriteLine("输入的路径无效，找到目录了再来吧");
         return;
     }
     if (Directory.Exists(path))
     {
         if(!File.Exists(Path.Combine(path, "_config.yml")))
         {
-            Console.WriteLine("δ�ڴ�Ŀ¼���ҵ� _config.yml. �����ṩ�Ĳ����� Hexo ��Ŀ¼");
+            Console.WriteLine("未在此目录下找到 _config.yml. 可能提供的并不是 Hexo 根目录");
             return;
         }
     }
     else
     {
-        Console.WriteLine("δ�ҵ���Ŀ¼���ҵ�Ŀ¼��������");
+        Console.WriteLine("未找到此目录，找到目录了再来吧");
         return;
     }
 
-    Console.WriteLine($"����·����{Path.Combine(path, "source\\_posts")}");
-    Console.WriteLine($"�洢ͼƬ·����{Path.Combine(path, "public\\images\\post")}");
-    Console.WriteLine("����·���Ƿ���ȷ��[y/n]");
+    Console.WriteLine($"文章路径：{Path.Combine(path, "source\\_posts")}");
+    Console.WriteLine($"存储图片路径：{Path.Combine(path, "public\\images\\post")}");
+    Console.WriteLine("以上路径是否正确？[y/n]");
     if (Console.ReadLine().Trim().ToLower() == "y")
     {
         ConfigHelper.SetConfig("HexoBasePath", path);
@@ -45,18 +45,18 @@ if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
     }
     else
     {
-        Console.Write("Hexo ������·����");
+        Console.Write("Hexo 的文章路径：");
         path = Console.ReadLine();
         ConfigHelper.SetConfig("HexoArticlePath", path);
         AppConfig.HexoArticlePath = path;
 
-        Console.Write("Hexo �Ĵ洢ͼƬ·����");
+        Console.Write("Hexo 的存储图片路径：");
         path = Console.ReadLine();
         ConfigHelper.SetConfig("HexoImagePath", path);
         AppConfig.HexoImagePath = path;
     }
 
-    Console.Write("��֤ Shell ��ȫ������Ҫ���м򵥵ļ�Ȩ��������һ������һЩ�����룺");
+    Console.Write("保证 Shell 安全我们需要进行简单的鉴权，请输入一个复杂一些的密码：");
     string password = Console.ReadLine();
     ConfigHelper.SetConfig("Password", password);
     AppConfig.Password = password;
