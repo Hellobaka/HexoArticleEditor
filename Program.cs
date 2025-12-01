@@ -1,39 +1,38 @@
 using MudBlazor.Services;
 using HexoArticleEditor.Components;
 using HexoArticleEditor;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Components.Authorization;
 using HexoArticleEditor.Auth;
 using System.Net;
+using Microsoft.Extensions.FileProviders;
 
 AppConfig.Load();
 if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
 {
-    Console.Write("ËÆºõÊÇµÚÒ»´ÎÆô¶¯Èí¼şÄØ£¡ĞèÒªÖ¸¶¨Ò»ÏÂ Hexo µÄÄ¿Â¼£º");
+    Console.Write("ä¼¼ä¹æ˜¯ç¬¬ä¸€æ¬¡å¯åŠ¨è½¯ä»¶å‘¢ï¼éœ€è¦æŒ‡å®šä¸€ä¸‹ Hexo çš„ç›®å½•ï¼š");
     string path = Console.ReadLine();
     if (string.IsNullOrEmpty(path))
     {
-        Console.WriteLine("ÊäÈëµÄÂ·¾¶ÎŞĞ§£¬ÕÒµ½Ä¿Â¼ÁËÔÙÀ´°É");
+        Console.WriteLine("è¾“å…¥çš„è·¯å¾„æ— æ•ˆï¼Œæ‰¾åˆ°ç›®å½•äº†å†æ¥å§");
         return;
     }
     if (Directory.Exists(path))
     {
         if(!File.Exists(Path.Combine(path, "_config.yml")))
         {
-            Console.WriteLine("Î´ÔÚ´ËÄ¿Â¼ÏÂÕÒµ½ _config.yml. ¿ÉÄÜÌá¹©µÄ²¢²»ÊÇ Hexo ¸ùÄ¿Â¼");
+            Console.WriteLine("æœªåœ¨æ­¤ç›®å½•ä¸‹æ‰¾åˆ° _config.yml. å¯èƒ½æä¾›çš„å¹¶ä¸æ˜¯ Hexo æ ¹ç›®å½•");
             return;
         }
     }
     else
     {
-        Console.WriteLine("Î´ÕÒµ½´ËÄ¿Â¼£¬ÕÒµ½Ä¿Â¼ÁËÔÙÀ´°É");
+        Console.WriteLine("æœªæ‰¾åˆ°æ­¤ç›®å½•ï¼Œæ‰¾åˆ°ç›®å½•äº†å†æ¥å§");
         return;
     }
 
-    Console.WriteLine($"ÎÄÕÂÂ·¾¶£º{Path.Combine(path, "source\\_posts")}");
-    Console.WriteLine($"´æ´¢Í¼Æ¬Â·¾¶£º{Path.Combine(path, "public\\images\\post")}");
-    Console.WriteLine("ÒÔÉÏÂ·¾¶ÊÇ·ñÕıÈ·£¿[y/n]");
+    Console.WriteLine($"æ–‡ç« è·¯å¾„ï¼š{Path.Combine(path, "source\\_posts")}");
+    Console.WriteLine($"å­˜å‚¨å›¾ç‰‡è·¯å¾„ï¼š{Path.Combine(path, "public\\images\\post")}");
+    Console.WriteLine("ä»¥ä¸Šè·¯å¾„æ˜¯å¦æ­£ç¡®ï¼Ÿ[y/n]");
     if (Console.ReadLine().Trim().ToLower() == "y")
     {
         ConfigHelper.SetConfig("HexoBasePath", path);
@@ -46,18 +45,18 @@ if (string.IsNullOrEmpty(AppConfig.HexoBasePath))
     }
     else
     {
-        Console.Write("Hexo µÄÎÄÕÂÂ·¾¶£º");
+        Console.Write("Hexo çš„æ–‡ç« è·¯å¾„ï¼š");
         path = Console.ReadLine();
         ConfigHelper.SetConfig("HexoArticlePath", path);
         AppConfig.HexoArticlePath = path;
 
-        Console.Write("Hexo µÄ´æ´¢Í¼Æ¬Â·¾¶£º");
+        Console.Write("Hexo çš„å­˜å‚¨å›¾ç‰‡è·¯å¾„ï¼š");
         path = Console.ReadLine();
         ConfigHelper.SetConfig("HexoImagePath", path);
         AppConfig.HexoImagePath = path;
     }
 
-    Console.Write("±£Ö¤ Shell °²È«ÎÒÃÇĞèÒª½øĞĞ¼òµ¥µÄ¼øÈ¨£¬ÇëÊäÈëÒ»¸ö¸´ÔÓÒ»Ğ©µÄÃÜÂë£º");
+    Console.Write("ä¿è¯ Shell å®‰å…¨æˆ‘ä»¬éœ€è¦è¿›è¡Œç®€å•çš„é‰´æƒï¼Œè¯·è¾“å…¥ä¸€ä¸ªå¤æ‚ä¸€äº›çš„å¯†ç ï¼š");
     string password = Console.ReadLine();
     ConfigHelper.SetConfig("Password", password);
     AppConfig.Password = password;
@@ -89,73 +88,21 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
-CreateSymbolLinkToImageFolder();
+
+// Serve Hexo images directly from the Hexo public/images directory
+var hexoImagesPath = Path.Combine(AppConfig.HexoBasePath, "public", "images");
+if (Directory.Exists(hexoImagesPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(hexoImagesPath),
+        RequestPath = "/images"
+    });
+}
+
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
-
-void CreateSymbolLinkToImageFolder()
-{
-    string path1 = Path.Combine(AppConfig.HexoBasePath, "public", "images");
-    string path2 = Path.GetFullPath("wwwroot") + "\\images";
-    bool result;
-    if (Directory.Exists(path2))
-    {
-        Directory.Delete(path2, true);
-    }
-    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-    {
-        result = CreateSymbolicLinkWindows(path2, path1);
-        if (!result)
-        {
-            Console.WriteLine("[-]GetLastError = " + Marshal.GetLastWin32Error());
-        }
-    }
-    else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-    {
-        result = CreateSymbolicLinkLinux(path2, path1);
-    }
-    else
-    {
-        throw new PlatformNotSupportedException();
-    }
-
-    if (!result)
-    {
-        Console.WriteLine("[-]´´½¨·ûºÅÁ´½Ó±»¾Ü¾ø£¬ÇëÌáÉıÈ¨ÏŞ");
-    }
-}
-
-bool CreateSymbolicLinkWindows(string symlink, string target)
-{
-    var process =  Process.Start("cmd.exe", $"/C mklink /J {symlink} {target}");
-    process.WaitForExit();
-    return process.ExitCode == 0;
-}
-
-bool CreateSymbolicLinkLinux(string symlink, string target)
-{
-    try
-    {
-        Process process = new Process();
-        process.StartInfo.FileName = "ln";
-        process.StartInfo.Arguments = $"-s \"{target}\" \"{symlink}\"";
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.CreateNoWindow = true;
-
-        process.Start();
-        process.WaitForExit();
-
-        return process.ExitCode == 0;
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Exception: {ex.Message}");
-        return false;
-    }
-}
